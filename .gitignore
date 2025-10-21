@@ -1,0 +1,12 @@
+/flamegraph.svg
+/perf.*
+
+/mfro-automation/target
+
+/mfro-automation/config.json
+
+/mfro-automation/radio/test-data
+/mfro-automation/radio/test-dump
+/mfro-automation/radio/*.csv
+/mfro-automation/radio/*.txt
+/mfro-automation/radio/*.png
