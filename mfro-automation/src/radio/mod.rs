@@ -2,7 +2,6 @@ use std::{
     fs::{self, File},
     io::{BufReader, ErrorKind, prelude::*},
     process::{Command, Stdio},
-    sync::mpsc::{Sender, channel},
     time::Duration,
 };
 
@@ -33,17 +32,14 @@ pub fn run(config: Config) -> Result<()> {
 
     let (mqtt, mut eventloop) = Client::new(mqtt, 10);
 
-    let (sender, radio_events) = channel();
-    std::thread::spawn(move || input_thread(config.sample_rate, sender));
-
     std::thread::spawn(move || {
-        for event in radio_events.iter() {
+        radio_thread(config.sample_rate, |event| {
             let topic = format!("mfro/honeywell5816/{}", event.device_id);
             let payload = serde_json::to_vec(&event.state).unwrap();
 
             mqtt.publish(topic, rumqttc::QoS::AtLeastOnce, true, payload)
                 .expect("failed to publish to mosquitto");
-        }
+        })
     });
 
     for event in eventloop.iter() {
@@ -62,10 +58,11 @@ pub struct DeviceEvent {
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DeviceState {
     pub open: bool,
+    pub motion: bool,
     pub low_battery: bool,
 }
 
-pub fn input_thread(sample_rate: f32, sender: Sender<DeviceEvent>) {
+pub fn radio_thread(sample_rate: f32, mut handler: impl FnMut(DeviceEvent)) {
     let rtl_sdr = Command::new("rtl_sdr")
         .args(["-f", "345M", "-s", "250k", "-"])
         .env_clear()
@@ -93,15 +90,16 @@ pub fn input_thread(sample_rate: f32, sender: Sender<DeviceEvent>) {
         if let Some(payload) = parser.parse(&data) {
             let message = Message::parse(payload);
 
-            sender
-                .send(DeviceEvent {
-                    device_id: message.device_id,
-                    state: DeviceState {
-                        open: message.reed_open,
-                        low_battery: message.low_battery,
-                    },
-                })
-                .unwrap();
+            println!("{:?}", message);
+
+            handler(DeviceEvent {
+                device_id: message.device_id,
+                state: DeviceState {
+                    open: message.reed_open,
+                    motion: message.motion,
+                    low_battery: message.low_battery,
+                },
+            })
         } else {
             let duration = Duration::from_secs_f32(data.len() as f32 / sample_rate);
 

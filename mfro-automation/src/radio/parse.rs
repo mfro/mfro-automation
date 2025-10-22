@@ -129,7 +129,7 @@ pub struct Message {
     pub channel: u8,
     pub device_id: u32,
     pub event: u8,
-    pub contact: bool,
+    pub motion: bool,
     pub tamper: bool,
     pub reed_open: bool,
     pub alarm: bool,
@@ -143,7 +143,7 @@ impl Message {
         let id = (body >> 8) & 0xfffff;
         let event = (body & 0xff) as u8;
 
-        let contact = (event & 0x80) != 0;
+        let motion = (event & 0x80) != 0;
         let tamper = (event & 0x40) != 0;
         let reed = (event & 0x20) != 0;
         let alarm = (event & 0x10) != 0;
@@ -154,7 +154,7 @@ impl Message {
             channel,
             device_id: id,
             event,
-            contact,
+            motion,
             tamper,
             reed_open: reed,
             alarm,
