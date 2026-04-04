@@ -4,6 +4,15 @@ pub fn default<T: Default>() -> T {
     Default::default()
 }
 
+pub fn empty(status_code: u16) -> Response {
+    Response {
+        status_code,
+        headers: vec![],
+        data: ResponseBody::empty(),
+        upgrade: None,
+    }
+}
+
 pub trait Mean {
     type Output;
 
@@ -60,7 +69,6 @@ impl Benchmark {
     }
 }
 
-
 macro_rules! benchmark {
     ($ident:ident, $( $body:tt )*) => {
         thread_local! {
@@ -83,3 +91,4 @@ macro_rules! benchmark {
     };
 }
 pub(crate) use benchmark;
+use rouille::{Response, ResponseBody};

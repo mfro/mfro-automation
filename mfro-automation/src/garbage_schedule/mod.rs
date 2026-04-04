@@ -7,7 +7,7 @@ use anyhow::Result;
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use icalendar::{Alarm, Calendar, Component, Event, EventLike};
 use reqwest::{Client, Error};
-use rouille::Response;
+use rouille::{Request, Response};
 use serde::{Deserialize, Serialize};
 
 use crate::util::default;
@@ -17,7 +17,6 @@ const BASE_URL: &str = "https://myutilities.seattle.gov/rest";
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     address: String,
-    port: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -390,27 +389,39 @@ impl<T> Cache<T> {
     }
 }
 
-#[tokio::main]
-pub async fn run(config: Config) -> Result<()> {
-    let client = UtilitiesClient::new();
+pub struct GarbageSchedule {
+    cache: Arc<Mutex<Cache<String>>>,
+}
 
-    let address = config.address.to_owned();
+impl GarbageSchedule {
+    pub fn new(config: Config) -> Self {
+        let client = UtilitiesClient::new();
 
-    let cache = Arc::new(Mutex::new(Cache::new(
-        Duration::hours(2),
-        Box::new(move || client.get_calendar(&address).unwrap()),
-    )));
+        let address = config.address.to_owned();
 
-    let addr = ("0.0.0.0", config.port);
-    rouille::start_server(addr, move |request| {
-        if request.url() == "/garbage.ics" {
-            let mut cache = cache.lock().unwrap();
-            let ics = cache.get();
+        let cache = Arc::new(Mutex::new(Cache::new(
+            Duration::hours(2),
+            Box::new(move || {
+                loop {
+                    match client.get_calendar(&address) {
+                        Ok(v) => break v,
+                        Err(e) => {
+                            eprintln!("{:?}", e);
+                            std::thread::sleep(std::time::Duration::from_secs(5 * 60))
+                        }
+                    }
+                }
+            }),
+        )));
 
-            Response::from_data("text/calendar", ics.clone())
-                .with_additional_header("content-disposition", "attachment; filename=garbage.ics")
-        } else {
-            Response::empty_404()
-        }
-    });
+        Self { cache }
+    }
+
+    pub fn serve_ics(&self, _request: &Request) -> Response {
+        let mut cache = self.cache.lock().unwrap();
+        let ics = cache.get();
+
+        Response::from_data("text/calendar", ics.clone())
+            .with_additional_header("content-disposition", "attachment; filename=garbage.ics")
+    }
 }
