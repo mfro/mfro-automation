@@ -1,17 +1,17 @@
 use std::time::Duration;
-use rouille::{Response, ResponseBody};
+
+use bt_hci::param::BdAddr;
 
 pub fn default<T: Default>() -> T {
     Default::default()
 }
 
-pub fn empty(status_code: u16) -> Response {
-    Response {
-        status_code,
-        headers: vec![],
-        data: ResponseBody::empty(),
-        upgrade: None,
-    }
+pub fn debug_addr(addr: BdAddr) -> String {
+    addr.0
+        .iter()
+        .map(|f| format!("{:02x}", f))
+        .collect::<Vec<_>>()
+        .join(":")
 }
 
 pub trait Mean {

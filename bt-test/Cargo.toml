@@ -1,0 +1,16 @@
+[package]
+name = "bt-test"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.100"
+bluer = { version = "0.17.4", features = ["full"] }
+tokio = { version = "1.48.0", features = ["full"] }
+futures-util = "0.3.31"
+trouble-host = { version = "0.6.0", features = ["scan", "central"] }
+bt-hci-linux = "0.1.0"
+bt-hci = "0.8.1"
+embassy-time = "0.5.1"
+embassy-futures = "0.1.2"
+embedded-io = "0.7.1"

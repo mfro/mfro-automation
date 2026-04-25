@@ -1,6 +1,8 @@
 /flamegraph.svg
 /perf.*
 
+/bt-test/target
+
 /mfro-automation/target
 
 /mfro-automation/config.json

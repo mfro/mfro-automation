@@ -3,10 +3,10 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, NaiveDate, Utc};
 use icalendar::{Alarm, Calendar, Component, Event, EventLike};
-use reqwest::{Client, Error};
+use reqwest::{Client};
 use rouille::{Request, Response};
 use serde::{Deserialize, Serialize};
 
@@ -162,7 +162,7 @@ impl UtilitiesClient {
         }
     }
 
-    async fn find_address(&self, address: &str) -> Result<String, Error> {
+    async fn find_address(&self, address: &str) -> Result<String> {
         let payload = AddressRequest {
             address: Address {
                 address_line1: address,
@@ -180,10 +180,12 @@ impl UtilitiesClient {
             .json::<AddressResponse>()
             .await?;
 
-        Ok(resp.address[0].prem_code.clone())
+        let address = resp.address.get(0).context("address is missing")?;
+
+        Ok(address.prem_code.clone())
     }
 
-    async fn find_account(&self, prem_code: &str) -> Result<String, Error> {
+    async fn find_account(&self, prem_code: &str) -> Result<String> {
         let payload = AccountRequest {
             address: PremCode { prem_code },
         };
@@ -200,7 +202,7 @@ impl UtilitiesClient {
         Ok(resp.account.account_number)
     }
 
-    async fn authenticate_guest(&self) -> Result<String, Error> {
+    async fn authenticate_guest(&self) -> Result<String> {
         let payload = AuthRequest {
             grant_type: "password",
             username: "guest",
@@ -223,7 +225,7 @@ impl UtilitiesClient {
         &self,
         auth: &str,
         account_number: &str,
-    ) -> Result<(String, String, Vec<Service>), Error> {
+    ) -> Result<(String, String, Vec<Service>)> {
         let payload = SummaryRequest {
             customer_id: "guest",
             account_context: AccountContext {
@@ -255,7 +257,7 @@ impl UtilitiesClient {
         person_id: &str,
         company_cd: &str,
         services: &[Service],
-    ) -> Result<CalendarResponse, Error> {
+    ) -> Result<CalendarResponse> {
         let service_points: Vec<&str> = services
             .iter()
             .map(|s| s.service_point_id.as_str())
@@ -286,7 +288,7 @@ impl UtilitiesClient {
         path: &str,
         auth: &str,
         body: &T,
-    ) -> Result<reqwest::Response, Error> {
+    ) -> reqwest::Result<reqwest::Response> {
         self.client
             .post(format!("{BASE_URL}{path}"))
             .bearer_auth(auth)
