@@ -1,0 +1,30 @@
+esphome:
+  name: 'new-device'
+
+esp32:
+  board: seeed_xiao_esp32c6
+  framework:
+    type: esp-idf
+
+network:
+  enable_ipv6: true
+
+openthread:
+  device_type: FTD
+  force_dataset: true
+  output_power: 20
+  tlv: 0e080000000000010000000300000f4a0300000c35060004001fffe00208c6fb5ee26f20463f0708fd263421faf204a30510f168026031bf8cd663f6d91003be749c030e68612d7468726561642d3664326401026d2d041044e70dc6ca8ce3a30e8336b67ced1a830c0402a0f7f8
+
+logger:
+
+api:
+  encryption:
+    key: 6SFHJVEVCe8bNU7lJcEidYUINu+peELm4dtWgg7qpBs=
+
+ota:
+  - platform: esphome
+    password: N6ttyiQp8cVY4APSwqbIFEVNra2fliwGBps5l/dC2Cg=
+
+sensor:
+  - platform: internal_temperature
+    name: "Internal Temperature"

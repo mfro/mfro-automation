@@ -1,12 +1,12 @@
-/flamegraph.svg
-/perf.*
+flamegraph.svg
+perf.*
 
 /bt-test/target
 
+/esphome/.esphome/
+
 /mfro-automation/target
-
 /mfro-automation/config.json
-
 /mfro-automation/radio/test-data
 /mfro-automation/radio/test-dump
 /mfro-automation/radio/*.csv
