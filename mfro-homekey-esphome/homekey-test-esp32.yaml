@@ -1,0 +1,59 @@
+esphome:
+  name: mfro-homekey-test
+
+esp32:
+  board: seeed_xiao_esp32c6
+  framework:
+    type: esp-idf
+    advanced:
+      enable_full_printf: true
+
+logger:
+  level: DEBUG
+
+network:
+  enable_ipv6: true
+
+# turn on wifi for setup with iphone
+# wifi:
+#   ssid: !secret wifi_ssid
+#   password: !secret wifi_password
+
+openthread:
+  device_type: FTD
+  force_dataset: true
+  output_power: 20
+  tlv: !secret thread_tlv
+
+api:
+  encryption:
+    key: !secret v1_api_key
+
+ota:
+  - platform: esphome
+    password: v1_ota_key
+
+external_components:
+  source: components
+
+spi:
+  clk_pin: D8
+  miso_pin: D9
+  mosi_pin: D10
+
+pn532_spi:
+  id: nfc_spi_module
+  cs_pin: D7
+  update_interval: 100ms
+
+homekey:
+  nfc_id: nfc_spi_module
+  setup_code: "111-22-333"
+  setup_id: "ES32"
+  on_auth:
+  - homeassistant.event:
+      event: esphome.mfro_homekey_auth
+
+binary_sensor:
+- platform: homekey
+  name: "homekey auth"

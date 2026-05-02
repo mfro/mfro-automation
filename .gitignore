@@ -3,8 +3,6 @@ perf.*
 
 /bt-test/target
 
-/esphome/.esphome/
-
 /mfro-automation/target
 /mfro-automation/config.json
 /mfro-automation/radio/test-data
