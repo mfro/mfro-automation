@@ -5,12 +5,9 @@ use windows::{
     Win32::{
         Foundation::*,
         Graphics::Gdi::HBITMAP,
-        Security::{
-            Authentication::Identity::{
-                KERB_INTERACTIVE_UNLOCK_LOGON, KerbInteractiveLogon, KerbWorkstationUnlockLogon,
-                LSA_STRING, LsaConnectUntrusted, LsaLookupAuthenticationPackage,
-            },
-            Credentials::CredProtectW,
+        Security::Authentication::Identity::{
+            KERB_INTERACTIVE_UNLOCK_LOGON, KerbInteractiveLogon, KerbWorkstationUnlockLogon,
+            LSA_STRING, LsaConnectUntrusted, LsaLookupAuthenticationPackage,
         },
         UI::Shell::*,
     },
@@ -20,16 +17,24 @@ use windows_core::{BOOL, PCWSTR, PSTR, PWSTR, Ref, Result};
 
 use crate::util::*;
 
-struct UnlockData {
-    password: String,
+pub struct UnlockCredentials {
+    pub username: String,
+    pub password: String,
 }
 
-unsafe impl Send for Main {}
+struct RawUnlockCredentials {
+    domain: Vec<u16>,
+    username: Vec<u16>,
+    protected_password: Vec<u16>,
+}
 
+// I can't find direct confirmation that this is thread safe,
+// but I can't imagine ICredentialProviderEvents::CredentialsChanged isn't
+unsafe impl Send for Main {}
 pub struct Main {
     scenario: CREDENTIAL_PROVIDER_USAGE_SCENARIO,
     advisee: Option<(ICredentialProviderEvents, usize)>,
-    unlock: Option<UnlockData>,
+    unlock: Option<RawUnlockCredentials>,
 }
 
 impl Main {
@@ -41,9 +46,21 @@ impl Main {
         }
     }
 
-    pub fn unlock(&mut self, password: String) {
+    pub fn unlock(&mut self, args: UnlockCredentials) {
         if let Some((advisee, context)) = self.advisee.as_ref() {
-            self.unlock = Some(UnlockData { password });
+            let domain = get_local_domain().unwrap();
+            let username = wide_chars(&args.username);
+
+            let mut password = wide_chars(&args.password);
+            password.push(0x00); // need null terminator
+            let protected_password = protect_password(&password).unwrap();
+
+            self.unlock = Some(RawUnlockCredentials {
+                domain,
+                username,
+                protected_password,
+            });
+
             unsafe { advisee.CredentialsChanged(*context).unwrap() };
         }
     }
@@ -62,10 +79,10 @@ impl MyProvider {
 
         let main = Arc::new(Mutex::new(Main::new()));
 
+        let stop = crate::connect::run(main.clone());
+
         let credential = MyCredential::new(main.clone());
         let credential = credential.into();
-
-        let stop = crate::connect::run(main.clone());
 
         MyProvider {
             main,
@@ -89,7 +106,11 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
         scenario: CREDENTIAL_PROVIDER_USAGE_SCENARIO,
         flags: u32,
     ) -> Result<()> {
-        log!("SetUsageScenario {:?} {:?}", scenario, flags);
+        log!(
+            "ICredentialProvider.SetUsageScenario {:?} {:?}",
+            scenario,
+            flags
+        );
 
         match scenario {
             CPUS_LOGON | CPUS_UNLOCK_WORKSTATION => {
@@ -105,7 +126,7 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
         &self,
         _pcpcs: *const CREDENTIAL_PROVIDER_CREDENTIAL_SERIALIZATION,
     ) -> Result<()> {
-        log!("SetSerialization");
+        log!("ICredentialProvider.SetSerialization");
         Ok(())
     }
 
@@ -114,7 +135,7 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
         advisee: Ref<ICredentialProviderEvents>,
         advisee_context: usize,
     ) -> Result<()> {
-        log!("Advise");
+        log!("ICredentialProvider.Advise");
 
         let advisee = advisee.unwrap().clone();
 
@@ -125,7 +146,7 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
     }
 
     fn UnAdvise(&self) -> Result<()> {
-        log!("UnAdvise");
+        log!("ICredentialProvider.UnAdvise");
 
         let mut main = self.this.main.lock().unwrap();
         main.advisee = None;
@@ -134,12 +155,12 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
     }
 
     fn GetFieldDescriptorCount(&self) -> Result<u32> {
-        log!("GetFieldDescriptorCount");
+        log!("ICredentialProvider.GetFieldDescriptorCount");
         Ok(0)
     }
 
     fn GetFieldDescriptorAt(&self, _: u32) -> Result<*mut CREDENTIAL_PROVIDER_FIELD_DESCRIPTOR> {
-        log!("GetFieldDescriptorAt");
+        log!("ICredentialProvider.GetFieldDescriptorAt");
         Err(E_NOTIMPL.into())
     }
 
@@ -149,19 +170,27 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
         default: *mut u32,
         default_auto_logon: *mut BOOL,
     ) -> Result<()> {
-        log!("GetCredentialCount");
+        log!("ICredentialProvider.GetCredentialCount");
 
         unsafe {
-            *count = 1;
+            let main = self.this.main.lock().unwrap();
+
+            if main.unlock.is_some() {
+                *count = 1;
+                *default_auto_logon = TRUE;
+            } else {
+                *count = 0;
+                *default_auto_logon = FALSE;
+            }
+
             *default = 0;
-            *default_auto_logon = FALSE;
         }
 
         Ok(())
     }
 
     fn GetCredentialAt(&self, _index: u32) -> Result<ICredentialProviderCredential> {
-        log!("GetCredentialAt");
+        log!("ICredentialProvider.GetCredentialAt");
 
         return Ok(self.this.credential.clone());
     }
@@ -181,24 +210,24 @@ impl MyCredential {
 
 impl ICredentialProviderCredential_Impl for MyCredential_Impl {
     fn Advise(&self, _pcpce: Ref<ICredentialProviderCredentialEvents>) -> Result<()> {
-        log!("Advise");
+        log!("ICrdentialProviderCredential.Advise");
         Ok(())
     }
 
     fn UnAdvise(&self) -> Result<()> {
-        log!("UnAdvise");
+        log!("ICrdentialProviderCredential.UnAdvise");
         Ok(())
     }
 
     fn SetSelected(&self) -> Result<BOOL> {
-        log!("SetSelected");
+        log!("ICrdentialProviderCredential.SetSelected");
         let main = self.this.main.lock().unwrap();
 
         Ok(main.unlock.is_some().into())
     }
 
     fn SetDeselected(&self) -> Result<()> {
-        log!("SetDeselected");
+        log!("ICrdentialProviderCredential.SetDeselected");
         Ok(())
     }
 
@@ -208,14 +237,17 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
         _pcpfs: *mut CREDENTIAL_PROVIDER_FIELD_STATE,
         _pcpfis: *mut CREDENTIAL_PROVIDER_FIELD_INTERACTIVE_STATE,
     ) -> Result<()> {
+        log!("ICrdentialProviderCredential.GetFieldState");
         Err(E_NOTIMPL.into())
     }
 
     fn GetStringValue(&self, _dwfieldid: u32) -> Result<PWSTR> {
+        log!("ICrdentialProviderCredential.GetStringValue");
         Err(E_NOTIMPL.into())
     }
 
     fn GetBitmapValue(&self, _dwfieldid: u32) -> Result<HBITMAP> {
+        log!("ICrdentialProviderCredential.GetBitmapValue");
         Err(E_NOTIMPL.into())
     }
 
@@ -225,10 +257,12 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
         _pbchecked: *mut BOOL,
         _ppszlabel: *mut PWSTR,
     ) -> Result<()> {
+        log!("ICrdentialProviderCredential.GetCheckboxValue");
         Err(E_NOTIMPL.into())
     }
 
     fn GetSubmitButtonValue(&self, _dwfieldid: u32) -> Result<u32> {
+        log!("ICrdentialProviderCredential.GetSubmitButtonValue");
         Err(E_NOTIMPL.into())
     }
 
@@ -238,26 +272,32 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
         _pcitems: *mut u32,
         _pdwselecteditem: *mut u32,
     ) -> Result<()> {
+        log!("ICrdentialProviderCredential.GetComboBoxValueCount");
         Err(E_NOTIMPL.into())
     }
 
     fn GetComboBoxValueAt(&self, _dwfieldid: u32, _dwitem: u32) -> Result<PWSTR> {
+        log!("ICrdentialProviderCredential.GetComboBoxValueAt");
         Err(E_NOTIMPL.into())
     }
 
     fn SetStringValue(&self, _dwfieldid: u32, _psz: &PCWSTR) -> Result<()> {
+        log!("ICrdentialProviderCredential.SetStringValue");
         Err(E_NOTIMPL.into())
     }
 
     fn SetCheckboxValue(&self, _dwfieldid: u32, _bchecked: BOOL) -> Result<()> {
+        log!("ICrdentialProviderCredential.SetCheckboxValue");
         Err(E_NOTIMPL.into())
     }
 
     fn SetComboBoxSelectedValue(&self, _dwfieldid: u32, _dwselecteditem: u32) -> Result<()> {
+        log!("ICrdentialProviderCredential.SetComboBoxSelectedValue");
         Err(E_NOTIMPL.into())
     }
 
     fn CommandLinkClicked(&self, _dwfieldid: u32) -> Result<()> {
+        log!("ICrdentialProviderCredential.CommandLinkClicked");
         Err(E_NOTIMPL.into())
     }
 
@@ -268,16 +308,16 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
         _ppszoptionalstatustext: *mut PWSTR,
         _pcpsioptionalstatusicon: *mut CREDENTIAL_PROVIDER_STATUS_ICON,
     ) -> Result<()> {
-        log!("GetSerialization");
+        log!("ICrdentialProviderCredential.GetSerialization");
 
         let mut main = self.this.main.lock().unwrap();
 
         if let Some(info) = main.unlock.take() {
-            if let Err(e) = do_login(info, main.scenario, response, result) {
-                log!("error: {:?}", e);
+            match login(main.scenario, info, result) {
+                Ok(()) => unsafe { *response = CPGSR_RETURN_CREDENTIAL_FINISHED },
+                Err(e) => log!("login error: {:?}", e),
             }
         }
-        log!("GetSerialization done");
 
         Ok(())
     }
@@ -293,38 +333,20 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
     }
 }
 
-fn do_login(
-    info: UnlockData,
+fn login(
     scenario: CREDENTIAL_PROVIDER_USAGE_SCENARIO,
-    response: *mut CREDENTIAL_PROVIDER_GET_SERIALIZATION_RESPONSE,
+    credentials: RawUnlockCredentials,
     result: *mut CREDENTIAL_PROVIDER_CREDENTIAL_SERIALIZATION,
 ) -> Result<()> {
     unsafe {
-        let mut password = wide_chars(&info.password);
-        password.push(0x00);
-
-        let mut protected_size = 0;
-        let _ = CredProtectW(false, &password, default(), &mut protected_size, default());
-        let mut protected_password = vec![0; protected_size as _];
-        CredProtectW(
-            false,
-            &password,
-            PWSTR(protected_password.as_mut_ptr()),
-            &mut protected_size,
-            default(),
-        )?;
-
-        let domain = wide_chars("mfro-desktop");
-        let user = wide_chars("Max");
-
-        let bytes_domain = cast_slice(&domain);
-        let bytes_user = cast_slice(&user);
-        let bytes_password = cast_slice(&protected_password);
+        let domain = cast_slice(&credentials.domain);
+        let user = cast_slice(&credentials.username);
+        let password = cast_slice(&credentials.protected_password);
 
         let offset_domain = std::mem::size_of::<KERB_INTERACTIVE_UNLOCK_LOGON>();
-        let offset_user = offset_domain + bytes_domain.len();
-        let offset_password = offset_user + bytes_user.len();
-        let total_size = offset_password + bytes_password.len();
+        let offset_user = offset_domain + domain.len();
+        let offset_password = offset_user + user.len();
+        let total_size = offset_password + password.len();
 
         let buffer = vec![0u8; total_size].leak();
 
@@ -335,20 +357,20 @@ fn do_login(
             _ => return Err(E_FAIL.into()),
         };
 
-        buffer[offset_domain..offset_user].copy_from_slice(&bytes_domain);
+        buffer[offset_domain..offset_user].copy_from_slice(&domain);
         (*logon).Logon.LogonDomainName.Buffer = PWSTR(offset_domain as _);
-        (*logon).Logon.LogonDomainName.Length = bytes_domain.len() as _;
-        (*logon).Logon.LogonDomainName.MaximumLength = bytes_domain.len() as _;
+        (*logon).Logon.LogonDomainName.Length = domain.len() as _;
+        (*logon).Logon.LogonDomainName.MaximumLength = domain.len() as _;
 
-        buffer[offset_user..offset_password].copy_from_slice(&bytes_user);
+        buffer[offset_user..offset_password].copy_from_slice(&user);
         (*logon).Logon.UserName.Buffer = PWSTR(offset_user as _);
-        (*logon).Logon.UserName.Length = bytes_user.len() as _;
-        (*logon).Logon.UserName.MaximumLength = bytes_user.len() as _;
+        (*logon).Logon.UserName.Length = user.len() as _;
+        (*logon).Logon.UserName.MaximumLength = user.len() as _;
 
-        buffer[offset_password..total_size].copy_from_slice(&bytes_password);
+        buffer[offset_password..total_size].copy_from_slice(&password);
         (*logon).Logon.Password.Buffer = PWSTR(offset_password as _);
-        (*logon).Logon.Password.Length = bytes_password.len() as _;
-        (*logon).Logon.Password.MaximumLength = bytes_password.len() as _;
+        (*logon).Logon.Password.Length = password.len() as _;
+        (*logon).Logon.Password.MaximumLength = password.len() as _;
 
         let mut lsa = default();
         LsaConnectUntrusted(&mut lsa).ok()?;
@@ -360,14 +382,14 @@ fn do_login(
             MaximumLength: kerberos_name.len() as _,
         };
 
-        let auth_package = &mut (*result).ulAuthenticationPackage;
+        let result = &mut *result;
+
+        let auth_package = &mut result.ulAuthenticationPackage;
         LsaLookupAuthenticationPackage(lsa, &kerberos_name, auth_package).ok()?;
 
-        (*result).rgbSerialization = buffer.as_mut_ptr();
-        (*result).cbSerialization = total_size as _;
-        (*result).clsidCredentialProvider = crate::MY_CLASS_ID;
-
-        *response = CPGSR_RETURN_CREDENTIAL_FINISHED;
+        result.rgbSerialization = buffer.as_mut_ptr();
+        result.cbSerialization = total_size as _;
+        result.clsidCredentialProvider = crate::MY_CLASS_ID;
     }
 
     Ok(())

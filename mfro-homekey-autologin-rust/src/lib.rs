@@ -9,11 +9,11 @@ use windows::{
 };
 use windows_core::{BOOL, GUID, HRESULT, IUnknown, Interface, Ref, Result};
 
-mod credentials;
+mod login;
 mod util;
 mod connect;
 
-use credentials::MyProvider;
+use login::MyProvider;
 use util::log;
 
 const MY_CLASS_ID: GUID = GUID::from_u128(0xece4d7a5_17f9_496c_8450_a490f033e0ae);
