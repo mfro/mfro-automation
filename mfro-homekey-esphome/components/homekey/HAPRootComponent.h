@@ -62,7 +62,11 @@ namespace esphome
             void dump_config() override;
 
             template<typename F> void add_auth_callback(F &&callback) { this->auth_callback.add(std::forward<F>(callback)); }
-            void add_binary_sensor(HomeKeyBinarySensor *binary_sensor) { binary_sensors.push_back(binary_sensor); }
+
+            void add_binary_sensor(HomeKeyBinarySensor *binary_sensor) {
+                binary_sensor->publish_initial_state(false);
+                binary_sensors.push_back(binary_sensor);
+            }
 
             void set_nfc_ctx(pn532::PN532 *nfc);
             void update_reader_data();
