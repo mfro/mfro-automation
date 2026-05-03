@@ -1,4 +1,4 @@
-use std::{ffi::OsStr, os::windows::ffi::OsStrExt};
+use std::{ffi::OsStr, os::windows::ffi::OsStrExt, path::Path};
 use windows::Win32::{
     Security::Credentials::CredProtectW, System::WindowsProgramming::GetComputerNameW,
 };
@@ -10,11 +10,14 @@ pub fn default<T: Default>() -> T {
 
 pub fn log_to_file(str: &str) {
     use std::{fs::File, io::Write};
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+
     let mut file = File::options()
         .write(true)
         .append(true)
         .create(true)
-        .open(r"E:\persistent\code\mfro-automation\mfro-homekey-autologin-rust\log.txt")
+        .open(root.join("log.txt"))
         .unwrap();
 
     file.write_all(str.as_bytes()).unwrap();

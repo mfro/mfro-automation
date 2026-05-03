@@ -9,9 +9,9 @@ use windows::{
 };
 use windows_core::{BOOL, GUID, HRESULT, IUnknown, Interface, Ref, Result};
 
+mod connect;
 mod login;
 mod util;
-mod connect;
 
 use login::MyProvider;
 use util::log;
