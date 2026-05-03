@@ -1,0 +1,4 @@
+- connect directly from esp to computer
+  - thread?
+  - USB??
+- disable reader unless logging in
