@@ -8,7 +8,6 @@
 #include <security.h>
 #include <intsafe.h>
 #include <shlwapi.h>
-#include <http.h>
 #include <string>
 #include "guid.h"
 

@@ -1,0 +1,25 @@
+[package]
+name = "mfro-homekey-autologin-rust"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+bytemuck = "1.25.0"
+rouille = "3.6.2"
+windows-core = "0.62.2"
+
+[dependencies.windows]
+version = "0.62.2"
+features = [
+  "Win32_Foundation",
+  "Win32_Graphics_Gdi",
+  "Win32_Security_Authentication_Identity",
+  "Win32_Security_Credentials",
+  "Win32_System_Com",
+  "Win32_System_LibraryLoader",
+  "Win32_System_SystemServices",
+  "Win32_UI_Shell",
+]
