@@ -1,7 +1,11 @@
 flamegraph.svg
 perf.*
+*.user
 
 /bt-test/target
+
+/HomeKeyCredentialProvider/.vs/
+/HomeKeyCredentialProvider/**/x64/
 
 /mfro-automation/target
 /mfro-automation/config.json
