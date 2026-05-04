@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex, mpsc::Sender};
+use std::{
+    mem::size_of,
+    sync::{Arc, Mutex, mpsc::Sender},
+};
 
 use bytemuck::cast_slice;
 use windows::{
@@ -9,6 +12,7 @@ use windows::{
             KERB_INTERACTIVE_UNLOCK_LOGON, KerbInteractiveLogon, KerbWorkstationUnlockLogon,
             LSA_STRING, LsaConnectUntrusted, LsaLookupAuthenticationPackage,
         },
+        System::Power::{ES_DISPLAY_REQUIRED, SetThreadExecutionState},
         UI::Shell::*,
     },
     core::implement,
@@ -48,6 +52,11 @@ impl Main {
 
     pub fn unlock(&mut self, args: UnlockCredentials) {
         if let Some((advisee, context)) = self.advisee.as_ref() {
+            unsafe {
+                // unlocking the computer doesn't actually turn on the monitors if they've turned off
+                SetThreadExecutionState(ES_DISPLAY_REQUIRED);
+            }
+
             let domain = get_local_domain().unwrap();
             let username = wide_chars(&args.username);
 
@@ -343,7 +352,7 @@ fn login(
         let user = cast_slice(&credentials.username);
         let password = cast_slice(&credentials.protected_password);
 
-        let offset_domain = std::mem::size_of::<KERB_INTERACTIVE_UNLOCK_LOGON>();
+        let offset_domain = size_of::<KERB_INTERACTIVE_UNLOCK_LOGON>();
         let offset_user = offset_domain + domain.len();
         let offset_password = offset_user + user.len();
         let total_size = offset_password + password.len();

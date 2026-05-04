@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{ECE4D7A5-17F9-496C-8450-A490F033E0AE}]
+@="HomeKeyCredentialProvider"
+
+[HKEY_CLASSES_ROOT\CLSID\{ECE4D7A5-17F9-496C-8450-A490F033E0AE}]
+@="HomeKeyCredentialProvider"
+
+[HKEY_CLASSES_ROOT\CLSID\{ECE4D7A5-17F9-496C-8450-A490F033E0AE}\InprocServer32]
+@="HomeKeyCredentialProvider.dll"
+"ThreadingModel"="Apartment"
+
