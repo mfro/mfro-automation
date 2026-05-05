@@ -1,5 +1,5 @@
 esphome:
-  name: mfro-homekey-test
+  name: mfro-homekey
 
 esp32:
   board: seeed_xiao_esp32c6
@@ -50,10 +50,10 @@ homekey:
   nfc_id: nfc_spi_module
   setup_code: "111-22-333"
   setup_id: "ES32"
-  on_auth:
-  - homeassistant.event:
-      event: esphome.mfro_homekey_auth
 
 binary_sensor:
 - platform: homekey
   name: "homekey auth"
+
+safe_mode:
+  disabled: true

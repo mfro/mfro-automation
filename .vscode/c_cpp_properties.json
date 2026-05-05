@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${HOME}/.platformio/packages/**/include/",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/**/components/*/",
+                "${workspaceFolder}/**/.esphome/build/*/src/",
+                "${workspaceFolder}/**/.esphome/build/*/managed_components/**/include/"
+            ],
+            "defines": [],
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}

@@ -256,7 +256,7 @@ namespace esphome
                 .fw_rev = strdup("0.9.0"),
                 .hw_rev = NULL,
                 .hw_finish = &hw_finish,
-                .pv = "1.1.0",
+                .pv = strdup("1.1.0"),
                 .cid = HAP_CID_LOCK,
                 .identify_routine = identify_routine,
             };
