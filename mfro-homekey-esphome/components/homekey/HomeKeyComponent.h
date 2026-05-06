@@ -37,7 +37,7 @@ namespace esphome
         {
         };
 
-        class HAPRootComponent : public Component
+        class HomeKeyComponent : public Component
         {
         public:
             nvs_handle homekit_nvs;
@@ -54,7 +54,7 @@ namespace esphome
             CallbackManager<void()> auth_callback;
             std::vector<HomeKeyBinarySensor *> binary_sensors;
 
-            HAPRootComponent(const char *setup_code, const char *setup_id);
+            HomeKeyComponent(const char *setup_code, const char *setup_id);
 
             float get_setup_priority() const override { return setup_priority::LATE; }
             void setup() override;

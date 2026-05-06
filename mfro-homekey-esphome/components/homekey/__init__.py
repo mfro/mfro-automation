@@ -6,12 +6,12 @@ from esphome.components import pn532
 from esphome.components.esp32 import add_idf_component, add_idf_sdkconfig_option
 import re
 
-DEPENDENCIES = ['esp32', 'network', 'mdns']
+DEPENDENCIES = ["esp32", "network", "mdns"]
 CODEOWNERS = ["@mfro"]
 MULTI_CONF = True
 
-homekit_ns = cg.esphome_ns.namespace('homekit')
-HAPRootComponent = homekit_ns.class_('HAPRootComponent', cg.Component)
+homekit_ns = cg.esphome_ns.namespace("homekit")
+HomeKeyComponent = homekit_ns.class_("HomeKeyComponent", cg.Component)
 OnAuthTrigger = homekit_ns.class_(
     "AuthTrigger", automation.Trigger.template()
 )
@@ -24,11 +24,11 @@ def hk_setup_code(value):
     if re.match("^[\\d]{3}-[\\d]{2}-[\\d]{3}$", value):
         return value
     raise cv.Invalid(
-        'Setup code must match the format XXX-XX-XXX'
+        "Setup code must match the format XXX-XX-XXX"
     )
 
 CONFIG_SCHEMA = cv.All(cv.Schema({
-    cv.GenerateID(): cv.declare_id(HAPRootComponent),
+    cv.GenerateID(): cv.declare_id(HomeKeyComponent),
     cv.Optional(CONF_PORT, default=32042): cv.port,
     cv.Optional("setup_code"): hk_setup_code,
     cv.Optional("setup_id"): cv.All(cv.string_strict,cv.Upper,cv.Length(min=4, max=4, msg="Setup ID has to be a 4 character long alpha numeric string (with capital letters)")),

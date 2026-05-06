@@ -4,7 +4,7 @@ import esphome.config_validation as cv
 from esphome.const import CONF_UID
 from esphome.core import HexInt
 
-from . import HAPRootComponent, homekit_ns
+from . import HomeKeyComponent, homekit_ns
 
 DEPENDENCIES = ["homekey"]
 
@@ -14,7 +14,7 @@ HomeKeyBinarySensor = homekit_ns.class_("HomeKeyBinarySensor", binary_sensor.Bin
 
 CONFIG_SCHEMA = binary_sensor.binary_sensor_schema(HomeKeyBinarySensor).extend(
     {
-        cv.GenerateID(CONF_HOMEKEY_ID): cv.use_id(HAPRootComponent),
+        cv.GenerateID(CONF_HOMEKEY_ID): cv.use_id(HomeKeyComponent),
     }
 )
 

@@ -1,4 +1,4 @@
-#include "HAPRootComponent.h"
+#include "HomeKeyComponent.h"
 
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG
 #include "esphome/core/log.h"
@@ -10,7 +10,7 @@ namespace esphome
     namespace homekit
     {
         char server_cert[] = {};
-        static constexpr const char *TAG = "HAPRootComponent";
+        static constexpr const char *TAG = "HomeKeyComponent";
 
         // https://github.com/kormax/apple-enhanced-contactless-polling
         static std::vector<uint8_t> ECP_HEADER{0x6A, 0x2, 0xCB, 0x2, 0x6, 0x2, 0x11, 0x0};
@@ -26,9 +26,9 @@ namespace esphome
         static std::vector<uint8_t> HOMEKEY_COLOR_BLACK{0x01, 0x04, 0x00, 0x00, 0x00, 0x00};
 
         // TLV data advertising support info
-        static std::vector<uint8_t> NFC_SUPPORTED_CONF = {0x01, 0x01, 0x10, 0x02, 0x01, 0x10};
+        static std::vector<uint8_t> NFC_SUPPORTED_CONF{0x01, 0x01, 0x10, 0x02, 0x01, 0x10};
 
-        static HAPRootComponent *instance;
+        static HomeKeyComponent *instance;
 
         void crc16a(unsigned char *data, unsigned int size, unsigned char *result)
         {
@@ -195,7 +195,7 @@ namespace esphome
             return HAP_SUCCESS;
         }
 
-        HAPRootComponent::HAPRootComponent(const char *setup_code, const char *setup_id)
+        HomeKeyComponent::HomeKeyComponent(const char *setup_code, const char *setup_id)
         {
             esp_log_level_set("esp-idf", ESP_LOG_WARN);
             esp_log_level_set("HK_HomeKit", ESP_LOG_DEBUG);
@@ -228,7 +228,7 @@ namespace esphome
             ESP_LOGI(TAG, "constructor complete");
         }
 
-        void HAPRootComponent::setup()
+        void HomeKeyComponent::setup()
         {
             // enable external antenna
             gpio_set_level(GPIO_NUM_3, 0);
@@ -332,16 +332,16 @@ namespace esphome
             // }
         }
 
-        void HAPRootComponent::loop()
+        void HomeKeyComponent::loop()
         {
             disable_loop();
         }
 
-        void HAPRootComponent::dump_config()
+        void HomeKeyComponent::dump_config()
         {
         }
 
-        void HAPRootComponent::set_nfc_ctx(pn532::PN532 *nfc)
+        void HomeKeyComponent::set_nfc_ctx(pn532::PN532 *nfc)
         {
             nfc_device = nfc;
             update_reader_data();
@@ -410,7 +410,7 @@ namespace esphome
             nfc->register_ontag_trigger(trigger);
         }
 
-        void HAPRootComponent::update_reader_data()
+        void HomeKeyComponent::update_reader_data()
         {
             uint8_t crc[2];
             std::vector<uint8_t> ecp;
