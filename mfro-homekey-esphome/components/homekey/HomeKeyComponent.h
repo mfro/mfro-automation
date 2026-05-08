@@ -24,15 +24,6 @@ namespace esphome
 {
     namespace homekit
     {
-
-        enum HomeKeyColor
-        {
-            TAN,
-            GOLD,
-            SILVER,
-            BLACK
-        };
-
         class HomeKeyBinarySensor : public binary_sensor::BinarySensor
         {
         };

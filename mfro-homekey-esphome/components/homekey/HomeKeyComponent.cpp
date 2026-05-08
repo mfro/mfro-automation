@@ -9,7 +9,6 @@ namespace esphome
 {
     namespace homekit
     {
-        char server_cert[] = {};
         static constexpr const char *TAG = "HomeKeyComponent";
 
         // https://github.com/kormax/apple-enhanced-contactless-polling
@@ -231,8 +230,8 @@ namespace esphome
         void HomeKeyComponent::setup()
         {
             // enable external antenna
-            gpio_set_level(GPIO_NUM_3, 0);
-            gpio_set_level(GPIO_NUM_14, 1);
+            // gpio_set_level(GPIO_NUM_3, 0);
+            // gpio_set_level(GPIO_NUM_14, 1);
 
             hap_cfg_t hap_cfg;
             hap_get_config(&hap_cfg);

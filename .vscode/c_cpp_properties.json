@@ -4,6 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${HOME}/.platformio/packages/**/include/",
+                "${USERPROFILE}/.platformio/packages/**/include/",
                 "${workspaceFolder}/**",
                 "${workspaceFolder}/**/components/*/",
                 "${workspaceFolder}/**/.esphome/build/*/src/",
