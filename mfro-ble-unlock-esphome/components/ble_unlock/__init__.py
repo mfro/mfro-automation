@@ -27,6 +27,7 @@ async def to_code(config):
     add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_EXT_ADV", True)
     add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_50_FEATURE_SUPPORT", True)
     add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_CHANNEL_SOUNDING", True)
+    add_idf_sdkconfig_option("CONFIG_BT_NIMBLE_INCL_SVC_DISCOVERY", True)
 
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)

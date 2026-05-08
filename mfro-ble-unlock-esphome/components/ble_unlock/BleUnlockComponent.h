@@ -1,4 +1,5 @@
 #pragma once
+#include <unordered_map>
 #include <vector>
 #include <tuple>
 #include <algorithm>
@@ -12,12 +13,19 @@
 #include "esphome/components/binary_sensor/binary_sensor.h"
 
 #include "nvs_flash.h"
+#include "nimble/ble.h"
+#include "host/ble_gatt.h"
 #include "psa/crypto_types.h"
 
 namespace esphome
 {
     namespace ble_unlock
     {
+        struct FoundDevice
+        {
+            int8_t rssi;
+            ble_addr_t address;
+        };
 
         class BleUnlockBinarySensor : public binary_sensor::BinarySensor
         {
@@ -26,6 +34,10 @@ namespace esphome
         class BleUnlockComponent : public Component
         {
         public:
+            std::vector<ble_gatt_svc> gatt_services;
+            std::vector<ble_gatt_chr> gatt_characteristics;
+            std::unordered_map<size_t, FoundDevice> found_devices;
+
             std::vector<psa_key_id_t> irks;
             std::vector<BleUnlockBinarySensor *> binary_sensors;
 
