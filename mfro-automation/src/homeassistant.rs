@@ -1,11 +1,11 @@
 use anyhow::Result;
 use reqwest::Client;
 
-pub struct GatewayClient {
+pub struct HomeAssistantClient {
     client: Client,
 }
 
-impl GatewayClient {
+impl HomeAssistantClient {
     pub fn new() -> Self {
         let client = Client::new();
 
@@ -26,6 +26,16 @@ impl GatewayClient {
     pub async fn trigger_garage_door(&self) -> Result<()> {
         self.client
             .post("http://10.8.1.6:8123/api/webhook/garage_door")
+            .send()
+            .await?;
+
+          Ok(())
+    }
+
+    #[tokio::main]
+    pub async fn trigger_auto_garage_door(&self) -> Result<()> {
+        self.client
+            .post("http://10.8.1.6:8123/api/webhook/auto_garage_door")
             .send()
             .await?;
 
