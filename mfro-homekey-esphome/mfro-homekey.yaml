@@ -54,6 +54,3 @@ homekey:
 binary_sensor:
 - platform: homekey
   name: "homekey auth"
-
-safe_mode:
-  disabled: true
