@@ -41,9 +41,13 @@ ble_unlock:
   - !secret irk_mfro_iphone12
   - !secret irk_mfro_apple_watch11
 
+switch:
+- platform: ble_unlock
+  name: "BLE Unlock Enable"
+
 binary_sensor:
 - platform: ble_unlock
-  name: "ble_unlock auth"
+  name: "BLE Unlock Detected"
 
 safe_mode:
   disabled: true

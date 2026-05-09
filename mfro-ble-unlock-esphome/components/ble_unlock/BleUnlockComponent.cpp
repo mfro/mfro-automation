@@ -31,53 +31,6 @@ namespace esphome
             return buf;
         }
 
-        static char *uuid_str(const ble_uuid_any_t *uuid)
-        {
-            static char buf[37];
-
-            switch (uuid->u.type)
-            {
-            case 16:
-                sprintf(buf, "%04x", uuid->u16.value);
-                break;
-            case 32:
-                sprintf(buf, "%08x", uuid->u32.value);
-                break;
-            case 128:
-                sprintf(buf, "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-                        uuid->u128.value[15], uuid->u128.value[14], uuid->u128.value[13], uuid->u128.value[12],
-                        uuid->u128.value[11], uuid->u128.value[10],
-                        uuid->u128.value[9], uuid->u128.value[8],
-                        uuid->u128.value[7], uuid->u128.value[6],
-                        uuid->u128.value[5], uuid->u128.value[4], uuid->u128.value[3],
-                        uuid->u128.value[2], uuid->u128.value[1], uuid->u128.value[0]);
-                break;
-            }
-
-            return buf;
-        }
-
-        BleUnlockComponent::BleUnlockComponent()
-        {
-            esp_log_level_set("esp-idf", ESP_LOG_WARN);
-            esp_log_level_set("HK_HomeKit", ESP_LOG_DEBUG);
-            esp_log_level_set("pn532", ESP_LOG_DEBUG);
-            esp_log_level_set("HAP", ESP_LOG_DEBUG);
-            esp_log_level_set(TAG, ESP_LOG_DEBUG);
-
-            ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
-            ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
-            ESP_LOGI(TAG, "%s", esp_err_to_name(nvs_flash_init()));
-
-            psa_status_t t = psa_crypto_init();
-            if (t != PSA_SUCCESS)
-                ESP_LOGE(TAG, "psa_crypto_init %d", t);
-
-            instance = this;
-
-            ESP_LOGI(TAG, "constructor complete");
-        }
-
         static bool is_irk_match(psa_key_id_t irk, ble_addr_t *addr)
         {
             if (!BLE_ADDR_IS_RPA(addr))
@@ -101,151 +54,6 @@ namespace esphome
                    && output[15] == addr->val[0]; //
         }
 
-        static void print_connection_description(ble_gap_conn_desc *desc)
-        {
-            ESP_LOGI(TAG, "handle=%d our_ota_addr_type=%d our_ota_addr=%s ",
-                     desc->conn_handle, desc->our_ota_addr.type,
-                     addr_str(&desc->our_ota_addr));
-            ESP_LOGI(TAG, "our_id_addr_type=%d our_id_addr=%s ",
-                     desc->our_id_addr.type, addr_str(&desc->our_id_addr));
-            ESP_LOGI(TAG, "peer_ota_addr_type=%d peer_ota_addr=%s ",
-                     desc->peer_ota_addr.type, addr_str(&desc->peer_ota_addr));
-            ESP_LOGI(TAG, "peer_id_addr_type=%d peer_id_addr=%s ",
-                     desc->peer_id_addr.type, addr_str(&desc->peer_id_addr));
-            ESP_LOGI(TAG, "conn_itvl=%d conn_latency=%d supervision_timeout=%d "
-                          "encrypted=%d authenticated=%d bonded=%d",
-                     desc->conn_itvl, desc->conn_latency,
-                     desc->supervision_timeout,
-                     desc->sec_state.encrypted,
-                     desc->sec_state.authenticated,
-                     desc->sec_state.bonded);
-        }
-
-        static int on_gatt_included_service_discovery(uint16_t conn_handle,
-                                                      const struct ble_gatt_error *error,
-                                                      const struct ble_gatt_incl_svc *service,
-                                                      void *arg)
-        {
-            ESP_LOGI(TAG, "on_gatt_included_service_discovery");
-
-            if (error->status == 0)
-            {
-                ESP_LOGI(TAG, "%d %d %d %s", service->handle, service->start_handle, service->end_handle, uuid_str(&service->uuid));
-            }
-            else if (error->status == BLE_HS_EDONE)
-            {
-                ESP_LOGI(TAG, "on_gatt_included_service_discovery done");
-
-                size_t index = (size_t)arg;
-                if (index < instance->gatt_services.size())
-                {
-                    ble_gattc_find_inc_svcs(conn_handle, instance->gatt_services[index].start_handle, instance->gatt_services[index].end_handle,
-                                            on_gatt_included_service_discovery, (void *)(index + 1));
-                }
-            }
-            else
-            {
-                ESP_LOGE(TAG, "on_gatt_included_service_discovery %d", error->status);
-            }
-
-            return 0;
-        }
-
-        static int on_gatt_attribute(uint16_t conn_handle,
-                                     const struct ble_gatt_error *error,
-                                     struct ble_gatt_attr *attribute,
-                                     void *arg)
-        {
-            ESP_LOGI(TAG, "on_gatt_attribute");
-
-            size_t index = (size_t)arg;
-
-            if (error->status == 0)
-            {
-                ESP_LOG_BUFFER_HEX(TAG, attribute->om->om_data, attribute->om->om_len);
-
-                if (index + 1 < instance->gatt_characteristics.size())
-                {
-                    ble_gattc_read(conn_handle, instance->gatt_characteristics[index + 1].val_handle, on_gatt_attribute, (void *)(index + 1));
-                }
-            }
-            else
-            {
-                ESP_LOGE(TAG, "on_gatt_attribute %d", error->status);
-            }
-
-            return 0;
-        }
-
-        static int on_gatt_characteristic_discovery(uint16_t conn_handle,
-                                                    const struct ble_gatt_error *error,
-                                                    const struct ble_gatt_chr *characteristic,
-                                                    void *arg)
-        {
-            ESP_LOGI(TAG, "on_gatt_characteristic_discovery");
-
-            size_t index = (size_t)arg;
-
-            if (error->status == 0)
-            {
-                instance->gatt_characteristics.push_back(*characteristic);
-
-                ESP_LOGI(TAG, "%d %d %d %s", characteristic->def_handle, characteristic->val_handle, characteristic->properties, uuid_str(&characteristic->uuid));
-            }
-            else if (error->status == BLE_HS_EDONE)
-            {
-                ESP_LOGI(TAG, "on_gatt_characteristic_discovery done");
-
-                if (index + 1 < instance->gatt_services.size())
-                {
-                    ble_gattc_disc_all_chrs(conn_handle,
-                                            instance->gatt_services[index + 1].start_handle,
-                                            instance->gatt_services[index + 1].end_handle,
-                                            on_gatt_characteristic_discovery, (void *)(index + 1));
-                }
-                else
-                {
-                    ble_gattc_read(conn_handle, instance->gatt_characteristics[0].val_handle, on_gatt_attribute, (void *)(0));
-                }
-            }
-            else
-            {
-                ESP_LOGE(TAG, "on_gatt_characteristic_discovery %d", error->status);
-            }
-
-            return 0;
-        }
-
-        static int on_gatt_service_discovery(uint16_t conn_handle,
-                                             const struct ble_gatt_error *error,
-                                             const struct ble_gatt_svc *service,
-                                             void *arg)
-        {
-            ESP_LOGI(TAG, "on_gatt_service_discovery");
-
-            if (error->status == 0)
-            {
-                instance->gatt_services.push_back(*service);
-
-                ESP_LOGI(TAG, "%d %d %s", service->start_handle, service->end_handle, uuid_str(&service->uuid));
-            }
-            else if (error->status == BLE_HS_EDONE)
-            {
-                ESP_LOGI(TAG, "on_gatt_service_discovery done");
-
-                ble_gattc_disc_all_chrs(conn_handle,
-                                        instance->gatt_services[0].start_handle,
-                                        instance->gatt_services[0].end_handle,
-                                        on_gatt_characteristic_discovery, (void *)0);
-            }
-            else
-            {
-                ESP_LOGE(TAG, "on_gatt_service_discovery %d", error->status);
-            }
-
-            return 0;
-        }
-
         static void start_discovery(void);
         static int on_gap_event(ble_gap_event *event, void *arg)
         {
@@ -264,17 +72,20 @@ namespace esphome
                         };
 
                         instance->found_devices.emplace(i, device);
+
                         ble_hs_adv_fields fields;
                         r = ble_hs_adv_parse_fields(&fields, event->ext_disc.data, event->ext_disc.length_data);
                         if (r != 0)
                             ESP_LOGE(TAG, "ble_hs_util_ensure_addr %d", r);
 
-                        ESP_LOGI(TAG, "match found: %02x:%02x:%02x:%02x:%02x:%02x", event->ext_disc.addr.val[5], event->ext_disc.addr.val[4], event->ext_disc.addr.val[3], event->ext_disc.addr.val[2], event->ext_disc.addr.val[1], event->ext_disc.addr.val[0]);
+                        ESP_LOGI(TAG, "match found: %s", addr_str(&event->ext_disc.addr));
                         ESP_LOGI(TAG, "rssi: %d", event->ext_disc.rssi);
                         ESP_LOGI(TAG, "data: %d", event->ext_disc.length_data);
                         ESP_LOG_BUFFER_HEX(TAG, event->ext_disc.data, event->ext_disc.length_data);
                         ESP_LOGI(TAG, "manufacturer data: %d", fields.mfg_data_len);
                         ESP_LOG_BUFFER_HEX(TAG, fields.mfg_data, fields.mfg_data_len);
+
+                        instance->do_unlock();
                     }
                 }
             }
@@ -286,69 +97,11 @@ namespace esphome
                     ESP_LOGI(TAG, "  %s %d", addr_str(&value.address), value.rssi);
                 }
 
-                if (instance->found_devices.contains(1))
-                {
-                    auto &device = instance->found_devices[1];
-
-                    r = ble_gap_connect(BLE_OWN_ADDR_PUBLIC, &device.address, 1000, NULL, on_gap_event, NULL);
-                    if (r != 0)
-                        ESP_LOGE(TAG, "ble_gap_connect %d", r);
-                }
-                else
+                if (instance->found_devices.empty())
                 {
                     instance->found_devices.clear();
                     start_discovery();
                 }
-            }
-            else if (event->type == BLE_GAP_EVENT_CONNECT)
-            {
-                ESP_LOGI(TAG, "BLE_GAP_EVENT_CONNECT %d", event->connect.status);
-
-                ble_gap_conn_desc description;
-                r = ble_gap_conn_find(event->connect.conn_handle, &description);
-                if (r != 0)
-                    ESP_LOGE(TAG, "ble_gap_conn_find %d", r);
-
-                print_connection_description(&description);
-
-                // r = ble_gap_security_initiate(event->connect.conn_handle);
-                // if (r != 0)
-                //     ESP_LOGE(TAG, "ble_gap_security_initiate %d", r);
-
-                r = ble_gattc_disc_all_svcs(event->enc_change.conn_handle, on_gatt_service_discovery, NULL);
-                if (r != 0)
-                    ESP_LOGE(TAG, "ble_gattc_disc_all_svcs %d", r);
-            }
-            else if (event->type == BLE_GAP_EVENT_ENC_CHANGE)
-            {
-                ESP_LOGI(TAG, "BLE_GAP_EVENT_ENC_CHANGE %d", event->enc_change.status);
-                ble_gap_conn_desc description;
-                r = ble_gap_conn_find(event->enc_change.conn_handle, &description);
-                if (r != 0)
-                    ESP_LOGE(TAG, "ble_gap_conn_find %d", r);
-
-                print_connection_description(&description);
-            }
-            else if (event->type == BLE_GAP_EVENT_LINK_ESTAB)
-            {
-                ESP_LOGI(TAG, "BLE_GAP_EVENT_LINK_ESTAB %d", event->link_estab.status);
-                ble_gap_conn_desc description;
-                r = ble_gap_conn_find(event->link_estab.conn_handle, &description);
-                if (r != 0)
-                    ESP_LOGE(TAG, "ble_gap_conn_find %d", r);
-
-                print_connection_description(&description);
-            }
-            else if (event->type == BLE_GAP_EVENT_DATA_LEN_CHG)
-            {
-                ESP_LOGI(TAG, "BLE_GAP_EVENT_DATA_LEN_CHG");
-
-                ble_gap_conn_desc description;
-                r = ble_gap_conn_find(event->data_len_chg.conn_handle, &description);
-                if (r != 0)
-                    ESP_LOGE(TAG, "ble_gap_conn_find %d", r);
-
-                print_connection_description(&description);
             }
             else
             {
@@ -369,20 +122,21 @@ namespace esphome
             discovery.filter_duplicates = 1;
             discovery.passive = 1;
 
-            r = ble_gap_disc(address_type, 5000, &discovery, on_gap_event, NULL);
+            r = ble_gap_disc(address_type, 2000, &discovery, on_gap_event, NULL);
             if (r != 0)
                 ESP_LOGE(TAG, "ble_gap_disc %d", r);
         }
 
         static void on_reset(int reason)
         {
+            ESP_LOGI(TAG, "reset");
         }
 
         static void on_sync(void)
         {
-            int r;
+            ESP_LOGI(TAG, "sync");
 
-            r = ble_hs_util_ensure_addr(0x00); // public identity address
+            int r = ble_hs_util_ensure_addr(0x00); // public identity address
             if (r != 0)
                 ESP_LOGE(TAG, "ble_hs_util_ensure_addr %d", r);
 
@@ -393,29 +147,56 @@ namespace esphome
         {
             ESP_LOGI(TAG, "begin host_task");
             nimble_port_run();
+            ESP_LOGI(TAG, "nimble complete");
+            nimble_port_freertos_deinit();
+        }
+
+        void BleUnlockSwitch::write_state(bool state)
+        {
+            ESP_LOGI(TAG, "write_state %d", state);
+
+            if (state && !instance->active)
+            {
+                instance->active = true;
+                nimble_port_init();
+                nimble_port_freertos_init(host_task);
+            }
+
+            publish_state(state);
+        }
+
+        BleUnlockComponent::BleUnlockComponent()
+        {
+            esp_log_level_set("esp-idf", ESP_LOG_WARN);
+            esp_log_level_set("HK_HomeKit", ESP_LOG_DEBUG);
+            esp_log_level_set("pn532", ESP_LOG_DEBUG);
+            esp_log_level_set("HAP", ESP_LOG_DEBUG);
+            esp_log_level_set(TAG, ESP_LOG_DEBUG);
+
+            ESP_LOGI(TAG, "[APP] Free memory: %" PRIu32 " bytes", esp_get_free_heap_size());
+            ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
+            ESP_LOGI(TAG, "%s", esp_err_to_name(nvs_flash_init()));
+
+            psa_status_t t = psa_crypto_init();
+            if (t != PSA_SUCCESS)
+                ESP_LOGE(TAG, "psa_crypto_init %d", t);
+
+            instance = this;
+
+            ESP_LOGI(TAG, "constructor complete");
         }
 
         void BleUnlockComponent::setup()
         {
-            // disable external antenna
-            gpio_set_level(GPIO_NUM_3, 0);
-            gpio_set_level(GPIO_NUM_14, 1);
-
-            int r;
-            psa_status_t t;
             ESP_LOGI(TAG, "begin setup");
 
-            r = nimble_port_init();
-            if (r != 0)
-                ESP_LOGE(TAG, "nimble_port_init %d", r);
+            // enable external antenna
+            gpio_set_level(GPIO_NUM_3, 0);
+            vTaskDelay(100);
+            gpio_set_level(GPIO_NUM_14, 1);
 
             ble_hs_cfg.reset_cb = on_reset;
             ble_hs_cfg.sync_cb = on_sync;
-
-            // r = ble_gap_set_host_feat(47, 0x01); // channel sounding
-            // if (r != 0) ESP_LOGE(TAG, "ble_gap_set_host_feat %d", r);
-
-            nimble_port_freertos_init(host_task);
         }
 
         void BleUnlockComponent::loop()
@@ -425,6 +206,34 @@ namespace esphome
 
         void BleUnlockComponent::dump_config()
         {
+        }
+
+        void BleUnlockComponent::do_unlock()
+        {
+            if (active)
+            {
+                active = false;
+
+                if (enable_switch)
+                {
+                    enable_switch->turn_off();
+                }
+
+                if (unlock_binary_sensor)
+                {
+                    unlock_binary_sensor->publish_state(true);
+                    set_timeout(1000, [this]()
+                                { unlock_binary_sensor->publish_state(false); });
+                }
+
+                // this needs to run on a thread other than nimble_host
+                set_timeout(0, []
+                            {
+                                int r = nimble_port_stop();
+                                if (r != 0) ESP_LOGE(TAG, "nimble_port_stop: %d", r);
+                                r = nimble_port_deinit();
+                                if (r != 0) ESP_LOGE(TAG, "nimble_port_deinit: %d", r); });
+            }
         }
 
         void BleUnlockComponent::add_irk(std::vector<uint8_t> irk)
