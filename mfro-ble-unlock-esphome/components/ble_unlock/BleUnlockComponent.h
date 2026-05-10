@@ -42,7 +42,6 @@ namespace esphome
         {
         public:
             std::vector<psa_key_id_t> irks;
-            std::unordered_map<size_t, FoundDevice> found_devices;
 
             bool active = false;
             BleUnlockSwitch *enable_switch = NULL;
@@ -53,7 +52,7 @@ namespace esphome
             float get_setup_priority() const override { return setup_priority::LATE; }
             void setup() override;
             void loop() override;
-            void dump_config() override;
+            void dump_config() override {}
 
             void do_unlock();
 

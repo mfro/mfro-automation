@@ -66,13 +66,6 @@ namespace esphome
                 {
                     if (is_irk_match(instance->irks[i], &event->ext_disc.addr))
                     {
-                        FoundDevice device = {
-                            .rssi = event->ext_disc.rssi,
-                            .address = event->ext_disc.addr,
-                        };
-
-                        instance->found_devices.emplace(i, device);
-
                         ble_hs_adv_fields fields;
                         r = ble_hs_adv_parse_fields(&fields, event->ext_disc.data, event->ext_disc.length_data);
                         if (r != 0)
@@ -86,20 +79,17 @@ namespace esphome
                         ESP_LOG_BUFFER_HEX(TAG, fields.mfg_data, fields.mfg_data_len);
 
                         instance->do_unlock();
+
+                        ble_gap_disc_cancel();
                     }
                 }
             }
             else if (event->type == BLE_GAP_EVENT_DISC_COMPLETE)
             {
-                ESP_LOGI(TAG, "discovery: %d", instance->found_devices.size());
-                for (auto [key, value] : instance->found_devices)
-                {
-                    ESP_LOGI(TAG, "  %s %d", addr_str(&value.address), value.rssi);
-                }
+                ESP_LOGI(TAG, "discovery complete %d", instance->active);
 
-                if (instance->found_devices.empty())
+                if (instance->active)
                 {
-                    instance->found_devices.clear();
                     start_discovery();
                 }
             }
@@ -139,8 +129,6 @@ namespace esphome
             int r = ble_hs_util_ensure_addr(0x00); // public identity address
             if (r != 0)
                 ESP_LOGE(TAG, "ble_hs_util_ensure_addr %d", r);
-
-            start_discovery();
         }
 
         static void host_task(void *arg)
@@ -153,13 +141,12 @@ namespace esphome
 
         void BleUnlockSwitch::write_state(bool state)
         {
-            ESP_LOGI(TAG, "write_state %d", state);
+            ESP_LOGI(TAG, "write_state %d %d", instance->active, state);
 
             if (state && !instance->active)
             {
                 instance->active = true;
-                nimble_port_init();
-                nimble_port_freertos_init(host_task);
+                start_discovery();
             }
 
             publish_state(state);
@@ -197,6 +184,9 @@ namespace esphome
 
             ble_hs_cfg.reset_cb = on_reset;
             ble_hs_cfg.sync_cb = on_sync;
+
+            nimble_port_init();
+            nimble_port_freertos_init(host_task);
         }
 
         void BleUnlockComponent::loop()
@@ -204,12 +194,10 @@ namespace esphome
             disable_loop();
         }
 
-        void BleUnlockComponent::dump_config()
-        {
-        }
-
         void BleUnlockComponent::do_unlock()
         {
+            ESP_LOGI(TAG, "do_unlock %d", active);
+
             if (active)
             {
                 active = false;
@@ -225,14 +213,6 @@ namespace esphome
                     set_timeout(1000, [this]()
                                 { unlock_binary_sensor->publish_state(false); });
                 }
-
-                // this needs to run on a thread other than nimble_host
-                set_timeout(0, []
-                            {
-                                int r = nimble_port_stop();
-                                if (r != 0) ESP_LOGE(TAG, "nimble_port_stop: %d", r);
-                                r = nimble_port_deinit();
-                                if (r != 0) ESP_LOGE(TAG, "nimble_port_deinit: %d", r); });
             }
         }
 
