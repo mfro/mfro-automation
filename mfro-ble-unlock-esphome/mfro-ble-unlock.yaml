@@ -20,9 +20,6 @@ network:
 #   password: !secret wifi_password
 
 openthread:
-  device_type: FTD
-  force_dataset: true
-  output_power: 20
   tlv: !secret thread_tlv
 
 api:
