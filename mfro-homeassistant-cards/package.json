@@ -1,0 +1,14 @@
+{
+  "name": "mfro-homeassistant-cards",
+  "version": "0.0.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --platform=browser --outfile=main.js",
+    "watch": "esbuild src/main.ts --bundle --platform=browser --outfile=main.js --watch"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3",
+    "typescript": "~5.9.3"
+  }
+}

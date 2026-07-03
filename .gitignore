@@ -14,3 +14,6 @@ perf.*
 /mfro-automation/radio/*.csv
 /mfro-automation/radio/*.txt
 /mfro-automation/radio/*.png
+
+/mfro-homeassistant-cards/main.js
+/mfro-homeassistant-cards/node_modules/
