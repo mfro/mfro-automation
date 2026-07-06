@@ -129,6 +129,8 @@ export class StatusCard extends HTMLElement {
 
         const stamp = event.last_changed.toLocaleTimeString([], {
           hourCycle: 'h23',
+          hour: 'numeric',
+          minute: '2-digit',
         });
 
         const details = document.createElement('span');

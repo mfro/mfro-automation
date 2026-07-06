@@ -1,13 +1,34 @@
 import { LogEvent, REED_SENSORS } from './common';
-import { dateEquals, formatDuration, html } from './util';
+import { dateEquals, formatDuration, html, plural } from './util';
 
 const ENTITY_IDS = [...REED_SENSORS];
 
-interface Event {
-  entity_id: string;
-  name: string;
-  start: Date;
-  duration: number | null; // milliseconds, null indicates ongoing
+type Event =
+  {
+    entity_id: string;
+    start: Date;
+  }
+  & EventChange;
+
+type EventChange =
+  | { type: 'open' }
+  | { type: 'close', duration: number }
+  | { type: 'complete', duration: number }
+
+interface Group {
+  start: Date,
+  end: Date,
+  events: Event[],
+}
+
+namespace Event {
+  export function end(e: Event) {
+    const end = new Date(e.start);
+    if (e.type == 'complete')
+      end.setMilliseconds(end.getMilliseconds() + e.duration);
+
+    return end;
+  }
 }
 
 export class HistoryCard extends HTMLElement {
@@ -96,64 +117,66 @@ export class HistoryCard extends HTMLElement {
       root.style.display = `flex`;
       root.style.flexDirection = `column`;
 
-      interface Group {
-        start: Date,
-        end: Date | null,
-        events: Event[],
-      }
-
       const events: Event[] = [];
       for (const [entity_id, state] of this.state) {
         if (!state.history) continue;
 
-        const entity = this.hass.entities[entity_id];
-        const device = this.hass.devices[entity.device_id];
+        console.log(entity_id);
 
-        // console.log(entity, device, log);
-
-        let current: null | { start: Date } = null;
+        let latest: null | Event = null;
 
         for (const event of state.history) {
-          const stamp = new Date(event.last_changed);
+          const timestamp = new Date(event.last_changed);
 
-          if (event.state == 'off' && current) {
-            var duration = stamp.valueOf() - current.start.valueOf();
-            // console.log(`${current.start} ${duration / 1000} seconds`);
+          // console.log(latest, event.state);
+
+          if (event.state == 'on' && !latest) {
+            events.push(latest = {
+              entity_id,
+              start: timestamp,
+              type: 'open',
+            });
+          } else if (latest && event.state == 'off') {
+            var duration = timestamp.valueOf() - latest.start.valueOf();
 
             events.push({
               entity_id,
-              name: device.name_by_user ?? device.name,
+              start: timestamp,
+              type: 'close',
               duration,
-              start: current.start,
             });
 
-            current = null;
-          } else if (event.state == 'on' && !current) {
-            current = { start: stamp };
+            latest = null;
           }
-        }
-
-        if (current) {
-          events.push({
-            entity_id,
-            name: device.name_by_user ?? device.name,
-            duration: null,
-            start: current.start,
-          });
         }
       }
 
       events.sort((a, b) => a.start.valueOf() - b.start.valueOf());
 
+      for (let i = 0; i + 1 < events.length; ++i) {
+        const a = events[i];
+        const b = events[i + 1];
+
+        if (a.entity_id == b.entity_id
+          && a.type == 'open'
+          && b.type == 'close') {
+
+          events.splice(i, 2, {
+            entity_id: a.entity_id,
+            start: a.start,
+            type: 'complete',
+            duration: b.start.valueOf() - a.start.valueOf(),
+          });
+        }
+      }
+
       const groups: Group[] = [];
 
       let group: Group | null = null;
       for (const event of events) {
-        const end = new Date(event.start);
-        if (event.duration !== null)
-          end.setMilliseconds(end.getMilliseconds() + event.duration);
+        const end = Event.end(event);
 
-        if (!group || (group.end !== null && (event.start.valueOf() - group.end.valueOf()) > 1000 * 60 * 15)) {
+        if (!group || (event.start.valueOf() - group.end.valueOf()) > 1000 * 60 * 5) {
           groups.push(group = {
             start: event.start,
             end: end,
@@ -162,8 +185,7 @@ export class HistoryCard extends HTMLElement {
         }
 
         group.events.push(event);
-        if (event.duration == null) group.end = null;
-        else if (group.end !== null && end > group.end) group.end = end;
+        if (end > group.end) group.end = end;
       }
 
       let currentDate = new Date();
@@ -192,36 +214,47 @@ export class HistoryCard extends HTMLElement {
           currentDate = group.start;
         }
 
-        if (group.end !== null) {
-          const header = document.createElement('div');
-          header.style.display = 'flex';
-          header.style.alignItems = 'baseline';
-          header.style.justifyContent = 'space-between';
-          if (headerSpacing) { header.style.paddingTop = `0.4rem`; headerSpacing = false; }
+        const entity_ids = new Set(group.events.map(g => g.entity_id));
 
-          const title = document.createElement('span');
+        const header = document.createElement('div');
+        header.style.display = 'flex';
+        header.style.alignItems = 'baseline';
+        header.style.justifyContent = 'space-between';
+        if (headerSpacing) { header.style.marginTop = `0.6rem`; headerSpacing = false; }
 
-          if (now.valueOf() - group.end.valueOf() < 1000) {
-            title.innerHTML = `now`;
-          } else {
-            const relative = formatDuration(now.valueOf() - group.end.valueOf());
-            title.innerHTML = `${relative} ago`;
-          }
+        const title = document.createElement('span');
+        const stamp = group.events[0].start.toLocaleTimeString([], {
+          hourCycle: 'h23',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
 
-          header.appendChild(title);
-
-          if (group.events.length != 1) {
-            const details = document.createElement('span');
-            details.innerHTML = `${formatDuration(group.end.valueOf() - group.start.valueOf())}`;
-            details.style.color = `var(--secondary-text-color)`;
-            details.style.fontSize = `0.8rem`;
-            header.appendChild(details);
-          }
-
-          root.appendChild(header);
+        if (now.valueOf() - group.end.valueOf() < 1000) {
+          title.innerHTML = `${stamp} · now`;
+        } else {
+          const relative = formatDuration(now.valueOf() - group.end.valueOf());
+          title.innerHTML = `${stamp} · ${relative} ago`;
         }
 
-        for (const event of [...group.events].reverse()) {
+        header.appendChild(title);
+
+        if (group.events.length != 1) {
+          const details = document.createElement('span');
+          details.innerHTML = `${formatDuration(group.end.valueOf() - group.start.valueOf())}`;
+          details.style.color = `var(--secondary-text-color)`;
+          details.style.fontSize = `0.8rem`;
+          header.appendChild(details);
+        }
+
+        root.appendChild(header);
+
+        for (const entity_id of [...entity_ids].sort((a, b) => a.localeCompare(b))) {
+          const events = group.events.filter(e => e.entity_id == entity_id);
+          const last = events.at(-1)!;
+
+          const entity = this.hass.entities[entity_id];
+          const device = this.hass.devices[entity.device_id];
+
           const row = document.createElement('div');
           row.style.display = 'flex';
           row.style.alignItems = 'center';
@@ -229,9 +262,9 @@ export class HistoryCard extends HTMLElement {
           const icon = document.createElement('state-badge') as any;
           icon.hass = this.hass;
           icon.stateObj = {
-            entity_id: event.entity_id,
-            state: event.duration === null ? 'on' : 'off',
-            attributes: this.hass.states[event.entity_id].attributes,
+            entity_id: entity.entity_id,
+            state: last.type == 'open' ? 'on' : 'off',
+            attributes: this.hass.states[entity.entity_id].attributes,
           };
           icon.stateColor = true;
           icon.style.height = '32px';
@@ -244,18 +277,13 @@ export class HistoryCard extends HTMLElement {
           text.style.alignItems = 'baseline';
 
           const label = document.createElement('span');
-          label.innerHTML = event.name;
+          label.innerHTML = device.name_by_user ?? device.name;
           text.appendChild(label);
 
-          const stamp = event.start.toLocaleTimeString([], {
-            hourCycle: 'h23',
-          });
-
           const details = document.createElement('span');
-          details.innerHTML = event.duration !== null
-            ? `${formatDuration(event.duration)} · ${stamp}`
-            : `${stamp}`;
-
+          const count = Math.floor(events.map(e => e.type == 'complete' ? 1 : 0.5).reduce((a, b) => a + b, 0));
+          if (count > 0)
+            details.innerHTML = `${plural(count, 'time')}`
           details.style.color = `var(--secondary-text-color)`;
           details.style.fontSize = `0.8rem`;
           text.appendChild(details);
@@ -266,6 +294,7 @@ export class HistoryCard extends HTMLElement {
 
           headerSpacing = true;
         }
+
       }
 
       this.appendChild(root);
