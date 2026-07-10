@@ -1,4 +1,4 @@
-import { REED_SENSORS, MOTION_SENSORS } from './common';
+import { REED_SENSORS, MOTION_SENSORS, addEntityInfo } from './common';
 import { dateEquals, formatDuration, html } from './util';
 
 const ENTITY_IDS = [...REED_SENSORS, ...MOTION_SENSORS];
@@ -109,6 +109,8 @@ export class StatusCard extends HTMLElement {
         const row = document.createElement('div');
         row.style.display = 'flex';
         row.style.alignItems = 'center';
+        row.style.cursor = 'pointer';
+        addEntityInfo(row, event.entity_id);
 
         const icon = document.createElement('state-badge') as any;
         icon.hass = this.hass;

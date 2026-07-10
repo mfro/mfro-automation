@@ -17,3 +17,19 @@ export const REED_SENSORS = [
 export const MOTION_SENSORS = [
   'binary_sensor.living_room_motion_3',
 ];
+
+export function addEntityInfo(node: HTMLElement, entity_id: string) {
+  const actionHandler = document.body.querySelector('action-handler') as any;
+  actionHandler.bind(node, { hasHold: false, hasDoubleClick: false });
+  node.addEventListener('action', e => {
+    var action = new Event('hass-more-info', {
+      bubbles: true,
+      composed: true,
+      cancelable: false,
+    });
+
+    Object.assign(action, { detail: { entityId: entity_id } });
+
+    node.dispatchEvent(action);
+  });
+}

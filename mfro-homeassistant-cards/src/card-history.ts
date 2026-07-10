@@ -1,4 +1,4 @@
-import { LogEvent, REED_SENSORS } from './common';
+import { addEntityInfo, LogEvent, REED_SENSORS } from './common';
 import { dateEquals, formatDuration, html, plural } from './util';
 
 const ENTITY_IDS = [...REED_SENSORS];
@@ -120,8 +120,6 @@ export class HistoryCard extends HTMLElement {
       const events: Event[] = [];
       for (const [entity_id, state] of this.state) {
         if (!state.history) continue;
-
-        console.log(entity_id);
 
         let latest: null | Event = null;
 
@@ -258,6 +256,8 @@ export class HistoryCard extends HTMLElement {
           const row = document.createElement('div');
           row.style.display = 'flex';
           row.style.alignItems = 'center';
+          row.style.cursor = 'pointer';
+          addEntityInfo(row, entity_id);
 
           const icon = document.createElement('state-badge') as any;
           icon.hass = this.hass;
