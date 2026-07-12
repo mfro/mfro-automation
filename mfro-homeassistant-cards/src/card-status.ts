@@ -18,7 +18,7 @@ export class StatusCard extends HTMLElement {
 
   rerenderCallback: number | null = null;
 
-  initialize() {
+  update() {
     const sensor = this.hass.states['sensor.change_history'];
     const changes = sensor.attributes['changes'];
 
@@ -32,9 +32,7 @@ export class StatusCard extends HTMLElement {
   connectedCallback() {
     console.log(performance.now() - this.t0, this.hass);
 
-    this.initialize();
-
-    this._render();
+    this.update();
 
     this.hass.connection.subscribeMessage(
       (event: any) => {
@@ -44,7 +42,7 @@ export class StatusCard extends HTMLElement {
           // inital state, we already have through this.hass
         } else if ('c' in event) {
           // TODO this is pretty gross
-          setTimeout(() => this._render(), 1);
+          setTimeout(() => this.update(), 1);
         }
       },
       {
