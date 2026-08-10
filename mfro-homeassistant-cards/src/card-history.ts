@@ -236,7 +236,7 @@ export class HistoryCard extends HTMLElement {
 
         header.appendChild(title);
 
-        if (group.events.length != 1) {
+        if (group.end.valueOf() != group.start.valueOf()) {
           const details = document.createElement('span');
           details.innerHTML = `${formatDuration(group.end.valueOf() - group.start.valueOf())}`;
           details.style.color = `var(--secondary-text-color)`;
