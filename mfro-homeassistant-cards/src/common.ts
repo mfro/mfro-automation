@@ -2,6 +2,7 @@ export interface LogEvent {
   state: string;
   last_changed: string;
   attributes?: Record<string, string>;
+  entity_id?: string;
 }
 
 export const REED_SENSORS = [

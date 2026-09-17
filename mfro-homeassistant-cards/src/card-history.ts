@@ -59,11 +59,11 @@ export class HistoryCard extends HTMLElement {
     this.hass.callApi('GET', url).then((response: LogEvent[][]) => {
       console.log(performance.now() - this.t0, response);
 
-      for (let i = 0; i < ENTITY_IDS.length; ++i) {
-        const entity_id = ENTITY_IDS[i];
-        const history = [...response[i]];
-
-        this.getEntityState(entity_id).history = history;
+      for (const entity_id of ENTITY_IDS) {
+        const history = response.find(a => a.length > 0 && a[0].entity_id == entity_id);
+        if (history) {
+          this.getEntityState(entity_id).history = [...history];
+        }
       }
 
       this._render();
