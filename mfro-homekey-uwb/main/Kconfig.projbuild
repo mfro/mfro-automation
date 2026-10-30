@@ -1,0 +1,82 @@
+menu "mfro-homekey-uwb"
+
+    config ENABLE_ULTRAWIDELOCK_BLE_UWB
+        bool "Aliro (Apple Home Key) over BLE + UWB"
+        default y
+        help
+            Advertise the Door Lock cluster's Aliro Provisioning + BLE-UWB
+            features and register the reader delegate, so Apple Home can
+            provision an Express (BLE + UWB) Home Key into Wallet.
+
+    config HOMEKEY_WAKE_WINDOW_S
+        int "Wake window length (s)"
+        default 30
+        range 5 300
+        help
+            How long the reader advertises and ranges after the "UWB wake"
+            switch is turned on, unless a key is granted first.
+
+    config HOMEKEY_UNLOCK_CM
+        int "Unlock distance (cm)"
+        default 100
+        range 20 500
+        help
+            A trusted UWB range at or under this (approach-filtered) grants.
+
+    config HOMEKEY_NEAR_DWELL
+        int "Consecutive in-range medians before granting"
+        default 2
+        range 1 5
+        help
+            How many consecutive median-filtered UWB ranges must sit inside
+            the unlock distance before granting. Each is one ranging block
+            (~180-200 ms). Ranges only reach the filter after the engine's
+            own 3-block trust consensus, so 1 is already 3+ agreeing blocks.
+            Upstream (a bolt) uses 2.
+
+    config HOMEKEY_APPROACH_PREDICT
+        bool "Predictive grant for walking approaches"
+        default n
+        depends on !ULTRAWIDELOCK_RSSI_GATE
+        help
+            Grant when the Kalman-predicted arrival at the unlock distance is
+            within HOMEKEY_PREDICT_LEAD_MS, i.e. before the key gets there.
+            Needs the RSSI power gate off (the gate holds ranging until the
+            phone is already close, so there's nothing to predict).
+
+    config HOMEKEY_PREDICT_LEAD_MS
+        int "Predictive grant lead (ms)"
+        default 500
+        range 100 2000
+        depends on HOMEKEY_APPROACH_PREDICT
+
+    config HOMEKEY_RELOCK_MS
+        int "Momentary unlock duration (ms)"
+        default 2000
+        range 500 30000
+        help
+            The Door Lock reports Unlocked for this long after a grant (or a
+            remote unlock), then reports Locked again. There is no bolt.
+
+    config HOMEKEY_AUTH_PULSE_MS
+        int "Auth sensor pulse (ms)"
+        default 1000
+        range 200 10000
+        help
+            How long the "homekey auth" occupancy sensor reads occupied after
+            a grant.
+
+    config HOMEKEY_LED_GPIO
+        int "Status LED GPIO (active low; -1 for none)"
+        default 15
+        help
+            XIAO ESP32-C6 user LED. Lit while the wake window is open.
+
+    config HOMEKEY_BUTTON_GPIO
+        int "Button GPIO (active low; -1 for none)"
+        default 9
+        help
+            XIAO ESP32-C6 BOOT button. Long press (5 s) opens a Matter
+            commissioning window; short press opens the wake window (bench).
+
+endmenu

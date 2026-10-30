@@ -1,0 +1,120 @@
+# mfro-homekey-uwb: Seeed XIAO ESP32-C6 + DWM3000EVB, Matter over Thread.
+#
+# Sources: ultrawidelock/apps/esp32-matter-lock/sdkconfig.defaults (the reader's
+# requirements; see the rationale comments there) merged with
+# esp-matter/examples/door_lock/sdkconfig.defaults.c6_thread (Thread on C6).
+# A Kconfig default only seeds a FRESH sdkconfig: after editing this file, delete
+# build/sdkconfig (make fullclean) or the old values stay.
+
+CONFIG_IDF_TARGET="esp32c6"
+
+# ---- flash: XIAO ESP32-C6 has 4 MB. No OTA slots (the image is ~2 MB); updates go
+# over USB. One large factory app partition, see partitions.csv.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_OFFSET=0xC000
+CONFIG_ENABLE_OTA_REQUESTOR=n
+
+# ---- CPU / scheduler
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
+# 1 ms tick: on the single-core C6 the DW3000 worker ties with the BLE controller
+# at priority 23 and waits for a time slice (ultrawidelock docs/esp32-gotchas.md
+# 6.10); 100 Hz would make that wait 10 ms against a ~1.8 ms slot deadline.
+CONFIG_FREERTOS_HZ=1000
+CONFIG_FREERTOS_ENABLE_BACKWARD_COMPATIBILITY=y
+CONFIG_FREERTOS_WATCHPOINT_END_OF_STACK=y
+# DW3000 SPI takes a FreeRTOS mutex per transfer inside the slot budget: keep
+# FreeRTOS in IRAM.
+CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH=n
+CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
+CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH=y
+
+# ---- console: XIAO's USB-C is the native USB-Serial-JTAG
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y
+CONFIG_ENABLE_CHIP_SHELL=n
+
+# ---- logging: WARN by default (blocking console writes cost slot deadlines);
+# `log <tag> <level>` raises it at runtime.
+CONFIG_LOG_DEFAULT_LEVEL_WARN=y
+CONFIG_LOG_MAXIMUM_LEVEL_DEBUG=y
+
+# ---- BLE: NimBLE shared between Matter commissioning and the Aliro reader
+CONFIG_BT_ENABLED=y
+CONFIG_BT_NIMBLE_ENABLED=y
+CONFIG_BT_NIMBLE_EXT_ADV=n
+CONFIG_BT_NIMBLE_HCI_EVT_BUF_SIZE=70
+CONFIG_BT_NIMBLE_ENABLE_CONN_REATTEMPT=n
+# Aliro transaction rides an L2CAP CoC.
+CONFIG_BT_NIMBLE_L2CAP_COC_MAX_NUM=2
+# P-256 auth runs on the nimble_host task.
+CONFIG_BT_NIMBLE_HOST_TASK_STACK_SIZE=16384
+# The reader needs the BLE host after commissioning.
+CONFIG_USE_BLE_ONLY_FOR_COMMISSIONING=n
+
+# ---- Thread (802.15.4) instead of Wi-Fi. Minimal Thread Device: a mains
+# powered MED (receiver on when idle, so still always reachable) that never
+# becomes a router, keeping 802.15.4 airtime off the radio BLE shares.
+CONFIG_OPENTHREAD_ENABLED=y
+CONFIG_OPENTHREAD_MTD=y
+CONFIG_OPENTHREAD_SRP_CLIENT=y
+CONFIG_OPENTHREAD_DNS_CLIENT=y
+CONFIG_OPENTHREAD_LOG_LEVEL_DYNAMIC=n
+CONFIG_OPENTHREAD_LOG_LEVEL_NOTE=y
+CONFIG_OPENTHREAD_CLI=n
+CONFIG_ENABLE_WIFI_STATION=n
+CONFIG_ENABLE_WIFI_AP=n
+CONFIG_LWIP_IPV6_AUTOCONFIG=n
+CONFIG_LWIP_IPV6_NUM_ADDRESSES=8
+CONFIG_LWIP_MULTICAST_PING=y
+CONFIG_USE_MINIMAL_MDNS=n
+CONFIG_ENABLE_EXTENDED_DISCOVERY=y
+CONFIG_LIBSODIUM_USE_MBEDTLS_SHA=y
+# 802.15.4 + BLE share the one 2.4 GHz radio.
+CONFIG_ESP_COEX_SW_COEXIST_ENABLE=y
+
+# ---- Matter
+CONFIG_ESP_MATTER_NVS_USE_COMPACT_ATTR_STORAGE=y
+CONFIG_ESP_MATTER_MAX_DYNAMIC_ENDPOINT_COUNT=4
+CONFIG_SUPPORT_GROUPCAST_CLUSTER=n
+CONFIG_MBEDTLS_HKDF_C=y
+CONFIG_MBEDTLS_ECP_FIXED_POINT_OPTIM=y
+
+# ---- Aliro reader (ultrawidelock)
+CONFIG_ENABLE_ULTRAWIDELOCK_BLE_UWB=y
+# Tuning (mfro-homekey-uwb menu). Set here, not in menuconfig: build/sdkconfig
+# is regenerated from this file whenever this file changes.
+CONFIG_HOMEKEY_UNLOCK_CM=200
+# Apple Watch on the owner's Apple ID gets in via the Access Document.
+CONFIG_ULTRAWIDELOCK_CRED_STEPUP=y
+CONFIG_ULTRAWIDELOCK_CRED_HOUSEKEEPING_STACK_SIZE=6144
+# Single anchor (no satellite). Must match on every node in the round.
+CONFIG_ULTRAWIDELOCK_NUM_RESPONDERS=1
+CONFIG_ULTRAWIDELOCK_RESPONDER_INDEX=0
+# RSSI power gate OFF. Upstream holds Reader-Status-AP-Completed until the BLE
+# RSSI reaches -55 dBm (calibrated on their S3 rig). On the XIAO's ceramic
+# antenna the RSSI didn't get there even at 23 cm, so the gate only released on
+# its 1.5 s cap, racing the iPhone's ~1.9 s patience: the phone hung up (HCI
+# 0x13, reason=531) and retried, sometimes 4-5 times. The wake window already
+# bounds phone power, which is what the gate protected. Off also removes the
+# 1.5 s hold from every walk-up and lets ranging start during the approach.
+CONFIG_ULTRAWIDELOCK_RSSI_GATE=n
+
+# ---- DW3000 wiring on the XIAO ESP32-C6 (see README.md). GPIO3/14 are the
+# XIAO's RF switch and must not be used.
+CONFIG_ULTRAWIDELOCK_DW3000_CUSTOM_PINS=y
+CONFIG_ULTRAWIDELOCK_DW3000_PIN_SCLK=19
+CONFIG_ULTRAWIDELOCK_DW3000_PIN_MISO=20
+CONFIG_ULTRAWIDELOCK_DW3000_PIN_MOSI=18
+CONFIG_ULTRAWIDELOCK_DW3000_PIN_CS=17
+CONFIG_ULTRAWIDELOCK_DW3000_PIN_IRQ=2
+CONFIG_ULTRAWIDELOCK_DW3000_PIN_RST=1
+CONFIG_ULTRAWIDELOCK_DW3000_PIN_WAKEUP=0
+
+# ---- misc
+CONFIG_BUTTON_PERIOD_TIME_MS=20
+CONFIG_BUTTON_LONG_PRESS_TIME_MS=5000
+CONFIG_ESP32_ENABLE_COREDUMP_TO_FLASH=y
+CONFIG_ESP32_COREDUMP_DATA_FORMAT_ELF=y
+CONFIG_HOMEKEY_UNLOCK_CM=200
