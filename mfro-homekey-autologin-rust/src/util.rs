@@ -1,8 +1,10 @@
-use std::{ffi::OsStr, os::windows::ffi::OsStrExt, path::Path};
+use std::{ffi::OsStr, os::windows::ffi::OsStrExt, path::Path, sync::OnceLock, time::Instant};
 use windows::Win32::{
     Security::Credentials::CredProtectW, System::WindowsProgramming::GetComputerNameW,
 };
 use windows_core::{PWSTR, Result};
+
+pub static T0: OnceLock<Instant> = OnceLock::new();
 
 pub fn default<T: Default>() -> T {
     Default::default()
@@ -13,6 +15,8 @@ pub fn log_to_file(str: &str) {
 
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
 
+    let t0 = T0.get_or_init(|| Instant::now());
+
     let mut file = File::options()
         .write(true)
         .append(true)
@@ -20,6 +24,8 @@ pub fn log_to_file(str: &str) {
         .open(root.join("log.txt"))
         .unwrap();
 
+    file.write_all(format!("{:010?} ", Instant::now() - *t0).as_bytes())
+        .unwrap();
     file.write_all(str.as_bytes()).unwrap();
     file.write_all(b"\n").unwrap();
 }

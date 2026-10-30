@@ -39,6 +39,8 @@ pub struct Main {
     scenario: CREDENTIAL_PROVIDER_USAGE_SCENARIO,
     advisee: Option<(ICredentialProviderEvents, usize)>,
     unlock: Option<RawUnlockCredentials>,
+
+    ignore_set_selected: bool,
 }
 
 impl Main {
@@ -47,6 +49,7 @@ impl Main {
             scenario: CPUS_INVALID,
             advisee: None,
             unlock: None,
+            ignore_set_selected: false,
         }
     }
 
@@ -182,15 +185,18 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
         log!("ICredentialProvider.GetCredentialCount");
 
         unsafe {
-            let main = self.this.main.lock().unwrap();
+            // let main = self.this.main.lock().unwrap();
 
-            if main.unlock.is_some() {
-                *count = 1;
-                *default_auto_logon = TRUE;
-            } else {
-                *count = 0;
-                *default_auto_logon = FALSE;
-            }
+            // if main.unlock.is_some() {
+            //     *count = 1;
+            //     *default_auto_logon = TRUE;
+            // } else {
+            //     *count = 0;
+            //     *default_auto_logon = FALSE;
+            // }
+
+            *count = 1;
+            *default_auto_logon = FALSE;
 
             *default = 0;
         }
@@ -220,6 +226,8 @@ impl MyCredential {
 impl ICredentialProviderCredential_Impl for MyCredential_Impl {
     fn Advise(&self, _pcpce: Ref<ICredentialProviderCredentialEvents>) -> Result<()> {
         log!("ICrdentialProviderCredential.Advise");
+        let mut main = self.this.main.lock().unwrap();
+        main.ignore_set_selected = true;
         Ok(())
     }
 
@@ -230,7 +238,15 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
 
     fn SetSelected(&self) -> Result<BOOL> {
         log!("ICrdentialProviderCredential.SetSelected");
-        let main = self.this.main.lock().unwrap();
+        let mut main = self.this.main.lock().unwrap();
+
+        if main.unlock.is_none() {
+            if main.ignore_set_selected {
+                main.ignore_set_selected = false;
+            } else {
+                crate::connect::trigger();
+            }
+        }
 
         Ok(main.unlock.is_some().into())
     }
@@ -338,6 +354,8 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
         _ppszoptionalstatustext: *mut PWSTR,
         _pcpsioptionalstatusicon: *mut CREDENTIAL_PROVIDER_STATUS_ICON,
     ) -> Result<()> {
+        log!("ICrdentialProviderCredential.ReportResult");
+
         Ok(())
     }
 }

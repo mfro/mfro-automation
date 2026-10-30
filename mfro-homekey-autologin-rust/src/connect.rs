@@ -2,7 +2,10 @@ use std::sync::{Arc, Mutex, mpsc::Sender};
 
 use rouille::{Request, Response, ResponseBody, Server};
 
-use crate::login::{Main, UnlockCredentials};
+use crate::{
+    login::{Main, UnlockCredentials},
+    util::log,
+};
 
 pub fn run(main: Arc<Mutex<Main>>) -> Sender<()> {
     let addr = ("10.8.1.9", 25563);
@@ -10,6 +13,8 @@ pub fn run(main: Arc<Mutex<Main>>) -> Sender<()> {
     let handler = move |request: &Request| {
         let username = request.get_param("username").unwrap();
         let password = request.get_param("password").unwrap();
+
+        log!("unlock received");
 
         let args = UnlockCredentials { username, password };
 
@@ -28,4 +33,15 @@ pub fn run(main: Arc<Mutex<Main>>) -> Sender<()> {
     let (_, sender) = server.stoppable();
 
     sender
+}
+
+pub fn trigger() {
+    let client = reqwest::blocking::Client::new();
+
+    client
+        .post("http://10.8.1.6:8123/api/webhook/-riUIfPmIwTZztBQ7CKRcxjGQ")
+        .send()
+        .expect("trigger");
+
+    log!("trigger complete");
 }
