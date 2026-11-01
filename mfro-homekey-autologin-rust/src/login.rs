@@ -1,21 +1,21 @@
 use std::{
+    fs::File,
     mem::size_of,
+    path::Path,
     sync::{Arc, Mutex, mpsc::Sender},
 };
 
 use bytemuck::cast_slice;
 use windows::{
     Win32::{
-        Foundation::*,
-        Graphics::Gdi::HBITMAP,
-        Security::Authentication::Identity::{
+        Foundation::*, Graphics::Gdi::HBITMAP, Security::Authentication::Identity::{
             KERB_INTERACTIVE_UNLOCK_LOGON, KerbInteractiveLogon, KerbWorkstationUnlockLogon,
             LSA_STRING, LsaConnectUntrusted, LsaLookupAuthenticationPackage,
-        },
-        System::Power::{ES_DISPLAY_REQUIRED, SetThreadExecutionState},
-        UI::Shell::*,
-    },
-    core::implement,
+        }, System::{
+            Com::CoTaskMemAlloc,
+            Power::{ES_DISPLAY_REQUIRED, SetThreadExecutionState},
+        }, UI::{Shell::*, WindowsAndMessaging::{GetWindowRect, IsWindowVisible}},
+    }, core::{implement, w},
 };
 use windows_core::{BOOL, PCWSTR, PSTR, PWSTR, Ref, Result};
 
@@ -40,16 +40,34 @@ pub struct Main {
     advisee: Option<(ICredentialProviderEvents, usize)>,
     unlock: Option<RawUnlockCredentials>,
 
+    advisee2: Option<ICredentialProviderCredentialEvents>,
     ignore_set_selected: bool,
+    fields: Vec<CREDENTIAL_PROVIDER_FIELD_DESCRIPTOR>,
 }
 
 impl Main {
     fn new() -> Self {
-        Self {
-            scenario: CPUS_INVALID,
-            advisee: None,
-            unlock: None,
-            ignore_set_selected: false,
+        let value = w!("test field");
+        unsafe {
+            let ptr = CoTaskMemAlloc((value.len() + 1) * size_of::<u16>()) as *mut u16;
+            std::ptr::copy_nonoverlapping(value.as_ptr(), ptr, value.len() + 1);
+            let str = PWSTR(ptr);
+
+            let fields = vec![CREDENTIAL_PROVIDER_FIELD_DESCRIPTOR {
+                dwFieldID: 0,
+                cpft: CPFT_TILE_IMAGE,
+                pszLabel: str,
+                guidFieldType: default(),
+            }];
+
+            Self {
+                scenario: CPUS_INVALID,
+                advisee: None,
+                advisee2: None,
+                unlock: None,
+                ignore_set_selected: false,
+                fields,
+            }
         }
     }
 
@@ -168,12 +186,27 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
 
     fn GetFieldDescriptorCount(&self) -> Result<u32> {
         log!("ICredentialProvider.GetFieldDescriptorCount");
-        Ok(0)
+
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let path = root.join("fallback");
+
+        if std::fs::exists(&path).is_ok_and(|v| !v) {
+            File::create(&path).unwrap();
+            Ok(self.main.lock().unwrap().fields.len() as _)
+        } else {
+            Ok(0)
+        }
+
+        // Ok(0)
     }
 
-    fn GetFieldDescriptorAt(&self, _: u32) -> Result<*mut CREDENTIAL_PROVIDER_FIELD_DESCRIPTOR> {
+    fn GetFieldDescriptorAt(
+        &self,
+        index: u32,
+    ) -> Result<*mut CREDENTIAL_PROVIDER_FIELD_DESCRIPTOR> {
         log!("ICredentialProvider.GetFieldDescriptorAt");
-        Err(E_NOTIMPL.into())
+        let mut main = self.this.main.lock().unwrap();
+        Ok(&mut main.fields[index as usize])
     }
 
     fn GetCredentialCount(
@@ -185,19 +218,8 @@ impl ICredentialProvider_Impl for MyProvider_Impl {
         log!("ICredentialProvider.GetCredentialCount");
 
         unsafe {
-            // let main = self.this.main.lock().unwrap();
-
-            // if main.unlock.is_some() {
-            //     *count = 1;
-            //     *default_auto_logon = TRUE;
-            // } else {
-            //     *count = 0;
-            //     *default_auto_logon = FALSE;
-            // }
-
             *count = 1;
             *default_auto_logon = FALSE;
-
             *default = 0;
         }
 
@@ -228,6 +250,7 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
         log!("ICrdentialProviderCredential.Advise");
         let mut main = self.this.main.lock().unwrap();
         main.ignore_set_selected = true;
+        main.advisee2 = Some(_pcpce.unwrap().clone());
         Ok(())
     }
 
@@ -239,6 +262,13 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
     fn SetSelected(&self) -> Result<BOOL> {
         log!("ICrdentialProviderCredential.SetSelected");
         let mut main = self.this.main.lock().unwrap();
+
+        unsafe {
+            let hwnd = main.advisee2.as_ref().unwrap().OnCreatingWindow().unwrap();
+            let mut rect = default();
+            GetWindowRect(hwnd, &mut rect);
+            log!("x: {:?}", rect);
+        }
 
         if main.unlock.is_none() {
             if main.ignore_set_selected {
@@ -258,17 +288,34 @@ impl ICredentialProviderCredential_Impl for MyCredential_Impl {
 
     fn GetFieldState(
         &self,
-        _dwfieldid: u32,
-        _pcpfs: *mut CREDENTIAL_PROVIDER_FIELD_STATE,
-        _pcpfis: *mut CREDENTIAL_PROVIDER_FIELD_INTERACTIVE_STATE,
+        _field_id: u32,
+        field_state: *mut CREDENTIAL_PROVIDER_FIELD_STATE,
+        interactive_state: *mut CREDENTIAL_PROVIDER_FIELD_INTERACTIVE_STATE,
     ) -> Result<()> {
         log!("ICrdentialProviderCredential.GetFieldState");
-        Err(E_NOTIMPL.into())
+
+        unsafe {
+            *field_state = CPFS_DISPLAY_IN_BOTH;
+            *interactive_state = CPFIS_NONE;
+        }
+
+        Ok(())
     }
 
-    fn GetStringValue(&self, _dwfieldid: u32) -> Result<PWSTR> {
+    fn GetStringValue(&self, _field_id: u32) -> Result<PWSTR> {
         log!("ICrdentialProviderCredential.GetStringValue");
-        Err(E_NOTIMPL.into())
+
+        let value = w!("hello world");
+
+        unsafe {
+            let ptr = CoTaskMemAlloc((value.len() + 1) * size_of::<u16>()) as *mut u16;
+            std::ptr::copy_nonoverlapping(value.as_ptr(), ptr, value.len() + 1);
+
+            let str = PWSTR(ptr);
+
+            log!("str: {}", str.display());
+            Ok(str)
+        }
     }
 
     fn GetBitmapValue(&self, _dwfieldid: u32) -> Result<HBITMAP> {
